@@ -1,8 +1,9 @@
-# OpenClaw Gemini Gateway (Adapter for Gemini CLI)
+# gemini-cli-claw v0.1
 
 OpenClawの強力な自律駆動システムと、Googleの公式「[Gemini CLI](https://github.com/google-gemini/gemini-cli)」を**直接かつ安全に**接続するための専用ゲートウェイ（アダプタ）です。
 
-**対応OS: Linux / macOS / Windows**
+**対応OS: Linux / macOS / Windows**  
+*(※ v0.1 現在、フルテストが完了しているのは Linux 環境のみとなります。Windows / macOS 向けの動作機構は組み込まれていますが、予期せぬ動作をする可能性があります。)*
 
 ## 🌟 開発の背景と目的
 近年、Gemini（あるいはそれに類するサービス）の内部Google OAuth認証トークンを無断で抽出し、別の非公式ツールに流用する「認証の悪用（トークンスティーラー）」が一時的に流行しました。しかし、Google側はこうした不正なアクセスパターンを検知し始めており、**トークンを不正利用したユーザーのGoogleアカウント自体がBanning（停止処分）される事例**が増加しています。
@@ -69,22 +70,14 @@ OpenClaw tools
 ### 🍏🐧 macOS / Linux の場合
 
 ```bash
-# 1. リポジトリをダウンロードして移動
-git clone <openclaw-repo>
-cd openclaw/gemini-cli-claw
-
-# 2. フルオート・インストーラーの実行
+# フルオート・インストーラーの実行
 ./install.sh
 ```
 
 ### 🪟 Windows の場合
 
 ```cmd
-:: 1. リポジトリをダウンロードして移動
-git clone <openclaw-repo>
-cd openclaw\gemini-cli-claw
-
-:: 2. フルオート・インストーラーの実行
+:: フルオート・インストーラーの実行
 install.bat
 ```
 
