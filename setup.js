@@ -15,7 +15,7 @@ const os = require("os");
 const readline = require("readline");
 
 const SCRIPT_DIR = __dirname;
-const OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, "..");
+let OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, "..");
 const ADAPTER_JS = path.join(SCRIPT_DIR, "adapter.js");
 const OPENCLAW_CONFIG = path.join(os.homedir(), ".openclaw", "openclaw.json");
 const GEMINI_CREDS_DIR = path.join(os.homedir(), ".gemini");
@@ -83,10 +83,45 @@ async function main() {
     console.log("\n" + L.welcome);
     console.log("=================================================\n");
 
-    // 1. Check OpenClaw
+    // 1. Check & Download OpenClaw
     console.log("[1/4] " + L.checkOpenclaw);
     let openclawNeedsBuild = false;
     
+    // Check if OpenClaw exists (checking for package.json in the parent directory)
+    // If we are cloned as a standalone repo, parent might not be openclaw.
+    const openclawPackageJson = path.join(OPENCLAW_ROOT, "package.json");
+    let isOpenclawPresent = false;
+    
+    if (fs.existsSync(openclawPackageJson)) {
+        try {
+            const pkg = JSON.parse(fs.readFileSync(openclawPackageJson, "utf8"));
+            if (pkg.name === "openclaw") {
+                isOpenclawPresent = true;
+            }
+        } catch (e) { }
+    }
+
+    if (!isOpenclawPresent) {
+        console.log("OpenClaw repository not found in parent directory.");
+        const dlAns = await question("OpenClaw本体が見つかりません。自動的にダウンロード (git clone) しますか？ / Download OpenClaw now? (Y/n): ");
+        if (dlAns.trim() === '' || dlAns.trim().toLowerCase() === 'y') {
+            console.log("Cloning OpenClaw...");
+            // Clone into parent directory's 'openclaw' folder if parent is not openclaw itself
+            const runClone = runCommand("git clone https://github.com/openclaw/openclaw.git openclaw-core", SCRIPT_DIR);
+            if (runClone.status !== 0) {
+                console.error("Error: Failed to download OpenClaw.");
+                process.exit(1);
+            }
+            // Update OPENCLAW_ROOT to the newly cloned directory
+            OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, "openclaw-core");
+            isOpenclawPresent = true;
+            console.log("✓ OpenClaw downloaded.\n");
+        } else {
+            console.error("Error: Setup cannot continue without OpenClaw.");
+            process.exit(1);
+        }
+    }
+
     // build target validation (dist/index.js shouldn't be missing if properly built)
     if (!fs.existsSync(path.join(OPENCLAW_ROOT, "dist", "index.js"))) {
         openclawNeedsBuild = true;
