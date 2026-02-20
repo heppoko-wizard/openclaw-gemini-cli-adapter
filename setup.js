@@ -117,7 +117,14 @@ async function main() {
             isOpenclawPresent = true;
             console.log("✓ OpenClaw downloaded.\n");
         } else {
-            console.error("Error: Setup cannot continue without OpenClaw.");
+            console.error("\n[!] " + (lang.trim() === '2' ? "セットアップを中断しました。" : "Setup aborted."));
+            console.error(lang.trim() === '2' ? "すでに OpenClaw がインストールされている場合は、この 'gemini-cli-claw' フォルダを OpenClaw のルートディレクトリ直下に配置してから再度 setup.js または install.sh を実行してください。" : "If OpenClaw is already installed, please move this 'gemini-cli-claw' folder directly into your OpenClaw root directory and run setup.js again.");
+            console.error(lang.trim() === '2' ? "配置例:" : "Example:");
+            console.error("  openclaw/");
+            console.error("  ├── src/");
+            console.error("  ├── package.json");
+            console.error("  └── gemini-cli-claw/   <-- ここに配置 / Place it here");
+            console.error("      └── setup.js\n");
             process.exit(1);
         }
     }
