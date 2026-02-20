@@ -1,8 +1,8 @@
 {
-  "name": "gemini-backend",
+  "name": "gemini-cli-claw",
   "version": "1.0.0",
-  "description": "OpenClaw Gemini CLI backend adapter with MCP tool bridge",
-  "main": "index.js",
+  "description": "OpenClaw Gateway for Gemini CLI - A powerful bridge that turns Gemini CLI into an autonomous agent.",
+  "main": "adapter.js",
   "scripts": {
     "setup": "node setup.js",
     "test": "echo \"Error: no test specified\" && exit 1"
