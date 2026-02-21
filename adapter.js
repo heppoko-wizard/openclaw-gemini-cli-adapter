@@ -2,285 +2,329 @@
 
 'use strict';
 
-const fs = require('fs');
-const os = require('os');
+/**
+ * gemini-cli-claw / adapter.js
+ *
+ * OpenAI-compatible HTTP server that bridges OpenClaw's embedded agent path
+ * (runEmbeddedPiAgent) to Google's Gemini CLI tool.
+ *
+ * This lets OpenClaw use its full context-pruning pipeline (limitHistoryTurns,
+ * sanitizeSessionHistory, etc.) before the messages reach this server.
+ * The server then converts the pruned messages array into a Gemini CLI session
+ * file and invokes `gemini --resume <file>` with only the latest user message
+ * as the active prompt, keeping Gemini's own history perfectly in sync with
+ * what OpenClaw decided to send.
+ *
+ * Registration in openclaw.json (models.providers):
+ *   "gemini-adapter": {
+ *     "baseUrl": "http://localhost:3972",
+ *     "api": "openai"
+ *   }
+ */
+
+const fs   = require('fs');
+const os   = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
+const http = require('http');
+const { spawn }  = require('child_process');
 const crypto = require('crypto');
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+const PORT = process.env.GEMINI_ADAPTER_PORT
+    ? parseInt(process.env.GEMINI_ADAPTER_PORT, 10)
+    : 3972;
+
+const GEMINI_TIMEOUT_MS = 180_000; // 3 minutes
+
+const __dir = __dirname; // eslint-disable-line no-underscore-dangle
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+function log(...args) {
+    console.error('[adapter]', ...args);
+}
+
+function randomId() {
+    return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36);
+}
+
 /**
- * Return an error message to OpenClaw via stdout and exit.
- * This guarantees OpenClaw always gets a response, never a silent hang.
+ * Write an SSE data event to the response.
  */
-function returnError(msg, err) {
-    const detail = err instanceof Error ? err.message : (err ? String(err) : '');
-    const text = detail ? `⚠️ Gemini Backend Error: ${msg}: ${detail}` : `⚠️ Gemini Backend Error: ${msg}`;
-    try { process.stdout.write(text); } catch (_) {}
-    process.exit(0); // exit 0 so OpenClaw treats the text output as a response
+function sseWrite(res, data) {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 // ---------------------------------------------------------------------------
-// 1. Read stdin
+// Gemini CLI discovery
 // ---------------------------------------------------------------------------
 
-let stdin = '';
-try {
-    stdin = fs.readFileSync(0, 'utf-8');
-} catch (e) {
-    returnError('Failed to read stdin', e);
+const geminiBinPath = path.join(__dir, 'node_modules', '.bin', 'gemini');
+const commandToRun  = fs.existsSync(geminiBinPath) ? geminiBinPath : 'gemini';
+
+// ---------------------------------------------------------------------------
+// Session ID mapping (OpenClaw sessionKey ↔ Gemini CLI sessionId)
+// ---------------------------------------------------------------------------
+
+const mapFilePath = path.join(os.homedir(), '.openclaw', 'gemini-session-map.json');
+
+function loadSessionMap() {
+    try {
+        if (fs.existsSync(mapFilePath)) {
+            return JSON.parse(fs.readFileSync(mapFilePath, 'utf-8'));
+        }
+    } catch (_) {}
+    return {};
 }
 
-// === TEMP DEBUG: stdinの内容確認 ===
-const _dbgPath = path.join(__dirname, 'adapter-debug.log');
-try {
-    fs.appendFileSync(_dbgPath, `[${new Date().toISOString()}] stdin(${stdin.length}):\n${stdin.substring(0, 600)}\n---\n`);
-} catch(_) {}
-// === END TEMP DEBUG ===
-
-// ---------------------------------------------------------------------------
-// 2. Parse OpenClaw payload
-//    OpenClaw wraps its system prompt in <system>...</system>
-// ---------------------------------------------------------------------------
-
-const systemRegex = /<system>\n([\s\S]*?)\n<\/system>/;
-const systemMatch = stdin.match(systemRegex);
-
-let systemBlock = '';
-let userMessage = stdin;
-
-if (systemMatch) {
-    systemBlock = systemMatch[1];
-    userMessage = stdin.replace(systemMatch[0], '').trim();
+function saveSessionMap(map) {
+    try {
+        fs.mkdirSync(path.dirname(mapFilePath), { recursive: true });
+        fs.writeFileSync(mapFilePath, JSON.stringify(map, null, 2), 'utf-8');
+    } catch (_) {}
 }
 
-// Extract image paths from user message: [media attached: path] or [Image: source: path]
-const mediaPaths = [];
-const imageExts = /\.(png|jpe?g|gif|webp|bmp|tiff?|heic|heif)$/i;
+// ---------------------------------------------------------------------------
+// Message conversion: OpenClaw messages → Gemini CLI session messages
+// ---------------------------------------------------------------------------
 
-// Match [media attached N/M: path (type) | url] or [media attached: path]
-const mediaAttachedPattern = /\[media attached(?:\s+\d+\/\d+)?:\s*([^\]]+)\]/gi;
-let match;
-while ((match = mediaAttachedPattern.exec(userMessage)) !== null) {
-    const content = match[1];
-    if (/^\d+\s+files?$/i.test(content.trim())) continue;
-    
-    const pathMatch = content.match(/^\s*(.+?\.(?:png|jpe?g|gif|webp|bmp|tiff?|heic|heif))\s*(?:\(|$|\|)/i);
-    if (pathMatch && pathMatch[1]) {
-        mediaPaths.push(pathMatch[1].trim());
+/**
+ * Extract plain text string from a message content field.
+ * Content may be a string or an array of content parts.
+ */
+function extractText(content) {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content
+        .filter(p => p && p.type === 'text' && typeof p.text === 'string')
+        .map(p => p.text)
+        .join('');
+}
+
+/**
+ * Convert an OpenClaw/OpenAI messages array (from runEmbeddedPiAgent via
+ * /v1/chat/completions) into a Gemini CLI session JSON object.
+ *
+ * Gemini session message types:
+ *   "user"   → human turn
+ *   "gemini" → model turn
+ *
+ * We skip the last user message here because it will be passed as -p '' to
+ * the Gemini CLI invocation (only history goes into the session file).
+ */
+/**
+ * Convert OpenClaw messages array into Gemini CLI session message objects.
+ */
+function convertToGeminiMessages(messages) {
+    const geminiMessages = [];
+    const now = new Date().toISOString();
+
+    for (const msg of messages) {
+        const role = msg.role;
+        const text = extractText(msg.content);
+
+        if (role === 'system') continue; // handled via GEMINI_SYSTEM_MD
+
+        if (role === 'user') {
+            geminiMessages.push({
+                id: randomId(),
+                timestamp: now,
+                type: 'user',
+                content: [{ text }],
+            });
+        } else if (role === 'assistant') {
+            const isArray = Array.isArray(msg.content);
+            const toolCallParts = isArray
+                ? msg.content.filter(p => p && (p.type === 'toolCall' || p.type === 'tool_use'))
+                : [];
+            const textContent = extractText(msg.content);
+
+            const geminiMsg = {
+                id: randomId(),
+                timestamp: now,
+                type: 'gemini',
+                content: textContent,
+            };
+
+            if (toolCallParts.length > 0) {
+                geminiMsg.toolCalls = toolCallParts.map(tc => ({
+                    id: tc.id || randomId(),
+                    name: tc.name,
+                    args: tc.arguments || tc.input || {},
+                    status: 'success',
+                    timestamp: now,
+                }));
+            }
+
+            geminiMessages.push(geminiMsg);
+        } else if (role === 'toolResult' || role === 'tool') {
+            const lastGemini = [...geminiMessages].reverse().find(m => m.type === 'gemini');
+            if (lastGemini && lastGemini.toolCalls) {
+                const toolName = msg.toolName || '';
+                const result = extractText(msg.content);
+                const matchingCall = lastGemini.toolCalls.find(
+                    tc => tc.name === toolName || !toolName
+                );
+                if (matchingCall) {
+                    matchingCall.result = [{ functionResponse: { name: toolName, response: { output: result } } }];
+                }
+            }
+        }
+    }
+    return geminiMessages;
+}
+
+// ---------------------------------------------------------------------------
+// Gemini CLI session file management
+// ---------------------------------------------------------------------------
+
+/**
+ * Find the existing Gemini CLI session file by its sessionId (UUID).
+ * Gemini CLI stores sessions as: session-<timestamp>-<uuid-prefix>.json
+ * inside the chats directory.
+ */
+function findSessionFile(chatsDir, sessionId) {
+    try {
+        const files = fs.readdirSync(chatsDir).filter(f => f.endsWith('.json'));
+        for (const file of files) {
+            try {
+                const content = JSON.parse(fs.readFileSync(path.join(chatsDir, file), 'utf-8'));
+                if (content.sessionId === sessionId) {
+                    return path.join(chatsDir, file);
+                }
+            } catch (_) {}
+        }
+    } catch (_) {}
+    return null;
+}
+
+/**
+ * Overwrite the messages array inside an existing Gemini CLI session file
+ * with OpenClaw's pruned history. Preserves all other fields (sessionId,
+ * projectHash, etc.) so that --resume continues to recognise the file.
+ *
+ * @returns {string} The sessionId for --resume, or null if file not found.
+ */
+function overwriteSessionHistory(chatsDir, sessionId, newMessages) {
+    const filePath = findSessionFile(chatsDir, sessionId);
+    if (!filePath) return null;
+
+    try {
+        const session = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        session.messages = newMessages;
+        session.lastUpdated = new Date().toISOString();
+        fs.writeFileSync(filePath, JSON.stringify(session, null, 2), 'utf-8');
+        return sessionId;
+    } catch (e) {
+        log(`Failed to overwrite session file: ${e.message}`);
+        return null;
     }
 }
 
-// Match [Image: source: /path/...]
-const messageImagePattern = /\[Image:\s*source:\s*([^\]]+\.(?:png|jpe?g|gif|webp|bmp|tiff?|heic|heif))\]/gi;
-while ((match = messageImagePattern.exec(userMessage)) !== null) {
-    if (match[1]) {
-        mediaPaths.push(match[1].trim());
-    }
-}
-
-// Optionally, remove the text references to avoid confusing the CLI or keeping them as text,
-// but for now we leave them as Gemini might use them for context, 
-// or we can remove them if they cause issues. We'll remove them to be clean.
-userMessage = userMessage.replace(mediaAttachedPattern, '').replace(messageImagePattern, '').trim();
-
-const workspaceMatch = systemBlock.match(/Your working directory is: (.*)/);
-const workspace = workspaceMatch ? workspaceMatch[1].trim() : process.cwd();
-
 // ---------------------------------------------------------------------------
-// 3. Parse command line arguments
+// Per-session Gemini CLI environment setup
 // ---------------------------------------------------------------------------
 
-let openclawSessionId = 'default';
-let providedSystemPrompt = '';
-let allowedSkillsPathsStr = '';
+/**
+ * Prepare an isolated GEMINI_CLI_HOME directory for this OpenClaw session,
+ * injecting our MCP server and copying auth credentials.
+ *
+ * Returns { env, chatsDir, tempSystemMdPath }.
+ */
+function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
+    const homeBaseDir  = path.join(os.homedir(), '.openclaw', 'gemini-sessions');
+    const tempHomeDir  = path.join(homeBaseDir, sessionKey);
+    const tempGeminiDir = path.join(tempHomeDir, '.gemini');
+    const chatsDir = path.join(tempGeminiDir, 'tmp', 'gemini-cli-claw', 'chats');
 
-for (let i = 2; i < process.argv.length; i++) {
-    if (process.argv[i] === '--session-id' && i + 1 < process.argv.length) {
-        openclawSessionId = process.argv[++i];
-    } else if (process.argv[i] === '--system' && i + 1 < process.argv.length) {
-        providedSystemPrompt = process.argv[++i];
-    } else if (process.argv[i] === '--allowed-skills' && i + 1 < process.argv.length) {
-        allowedSkillsPathsStr = process.argv[++i];
-    }
-}
+    fs.mkdirSync(chatsDir, { recursive: true });
 
-// ---------------------------------------------------------------------------
-// 4. Build system prompt
-// ---------------------------------------------------------------------------
+    // --- settings.json with MCP server injection ---
+    const realGeminiDir  = path.join(os.homedir(), '.gemini');
+    const realSettingsPath = path.join(realGeminiDir, 'settings.json');
+    let userSettings = {};
+    try {
+        if (fs.existsSync(realSettingsPath)) {
+            userSettings = JSON.parse(fs.readFileSync(realSettingsPath, 'utf-8'));
+        }
+    } catch (_) {}
 
-// OpenClaw already provides a fully formed system prompt inside <system>...</system>.
-// We use it directly as the Gemini CLI system prompt.
-let systemMdContent = systemBlock || '';
+    userSettings.mcpServers = userSettings.mcpServers || {};
+    userSettings.mcpServers['openclaw-tools'] = {
+        command: 'node',
+        args: [path.join(__dir, 'mcp-server.mjs'), sessionKey, workspaceDir || process.cwd()],
+    };
 
-if (!systemMdContent) {
-    if (providedSystemPrompt) {
-        systemMdContent = `## OpenClaw Dynamic Context\n\n${providedSystemPrompt}\n`;
-    } else {
-        systemMdContent = `# OpenClaw Gemini Gateway\n\nRunning with no system prompt.`;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// 5. Write temporary system-prompt file
-// ---------------------------------------------------------------------------
-
-const tempSystemMdPath = path.join(
-    os.tmpdir(),
-    `gemini-system-${crypto.randomUUID ? crypto.randomUUID() : Date.now()}.md`
-);
-try {
-    fs.writeFileSync(tempSystemMdPath, systemMdContent, 'utf-8');
-} catch (e) {
-    returnError('Failed to write temporary system prompt file', e);
-}
-
-// ---------------------------------------------------------------------------
-// 6. Set up isolated GEMINI_CLI_HOME per session
-// ---------------------------------------------------------------------------
-
-const homeBaseDir = path.join(os.homedir(), '.openclaw', 'gemini-sessions');
-const tempHomeDir = path.join(homeBaseDir, openclawSessionId);
-const tempGeminiDir = path.join(tempHomeDir, '.gemini');
-
-try {
-    fs.mkdirSync(tempGeminiDir, { recursive: true });
-} catch (e) {
-    returnError(`Failed to create session directory: ${tempGeminiDir}`, e);
-}
-
-// Merge real settings.json with our MCP server injection
-let userSettings = {};
-const realGeminiDir = path.join(os.homedir(), '.gemini');
-const realSettingsPath = path.join(realGeminiDir, 'settings.json');
-try {
-    if (fs.existsSync(realSettingsPath)) {
-        userSettings = JSON.parse(fs.readFileSync(realSettingsPath, 'utf-8'));
-    }
-} catch (_) {
-    // Non-fatal: proceed with empty settings
-}
-
-userSettings.mcpServers = userSettings.mcpServers || {};
-userSettings.mcpServers['openclaw-tools'] = {
-    command: 'node',
-    args: [path.join(__dirname, 'mcp-server.mjs'), openclawSessionId, workspace],
-};
-
-try {
     fs.writeFileSync(
         path.join(tempGeminiDir, 'settings.json'),
         JSON.stringify(userSettings, null, 2),
         'utf-8'
     );
-} catch (e) {
-    returnError('Failed to write Gemini settings.json', e);
-}
 
-// Symlink auth/config files from real ~/.gemini into the isolated home
-const filesToLink = ['oauth_creds.json', 'google_accounts.json', 'installation_id'];
-for (const file of filesToLink) {
-    const realFile = path.join(realGeminiDir, file);
-    if (!fs.existsSync(realFile)) continue;
-        try {
-            // Windowsでの管理者権限エラー(EPERM)を回避するため、ファイルはシンボリックリンクではなくハードコピーする
-            fs.copyFileSync(realFile, path.join(tempGeminiDir, file));
-        } catch (e) {
-            console.error(`[adapter] Warning: failed to copy ${file}: ${e.message}`);
-        }
-}
-
-// Symlink allowed skills directories
-if (allowedSkillsPathsStr) {
-    const tempSkillsDir = path.join(tempGeminiDir, 'skills');
-    try {
-        fs.mkdirSync(tempSkillsDir, { recursive: true });
-        for (const skillPath of allowedSkillsPathsStr.split(',').map(p => p.trim()).filter(Boolean)) {
-            if (!fs.existsSync(skillPath)) continue;
-            const linkTarget = path.join(tempSkillsDir, path.basename(skillPath));
-            try {
-                // 'junction' を使用することで、Windows（開発者モード非依存）でも管理者権限なしにディレクトリリンクを作成可能
-                fs.symlinkSync(skillPath, linkTarget, 'junction');
-            } catch (e) {
-                if (e.code !== 'EEXIST') {
-                    console.error(`[adapter] Warning: failed to symlink skill ${skillPath}: ${e.message}`);
-                }
-            }
-        }
-    } catch (e) {
-        // Non-fatal: skills may not be available but core functionality continues
-        console.error(`[adapter] Warning: skill setup failed: ${e.message}`);
+    // --- Copy auth credentials ---
+    for (const file of ['oauth_creds.json', 'google_accounts.json', 'installation_id']) {
+        const src = path.join(realGeminiDir, file);
+        if (!fs.existsSync(src)) continue;
+        try { fs.copyFileSync(src, path.join(tempGeminiDir, file)); } catch (_) {}
     }
+
+    // --- Write system prompt to a temp .md file ---
+    const tempSystemMdPath = path.join(
+        os.tmpdir(),
+        `gemini-system-${randomId()}.md`
+    );
+    fs.writeFileSync(tempSystemMdPath, systemPrompt || '# OpenClaw Gemini Gateway', 'utf-8');
+
+    const env = {
+        ...process.env,
+        GEMINI_SYSTEM_MD: tempSystemMdPath,
+        GEMINI_CLI_HOME: tempHomeDir,
+    };
+
+    return { env, chatsDir, tempSystemMdPath };
 }
 
 // ---------------------------------------------------------------------------
-// 7. Session ID mapping  (OpenClaw sessionId <-> Gemini CLI sessionId)
+// Gemini CLI runner (streaming → SSE)
 // ---------------------------------------------------------------------------
-
-const mapFilePath = path.join(os.homedir(), '.gemini', 'openclaw-session-map.json');
-let sessionMap = {};
-try {
-    if (fs.existsSync(mapFilePath)) {
-        sessionMap = JSON.parse(fs.readFileSync(mapFilePath, 'utf-8'));
-    }
-} catch (_) { /* Ignore: start with empty map */ }
-
-const geminiSessionId = sessionMap[openclawSessionId];
-
-// ---------------------------------------------------------------------------
-// 8. Prepare Gemini CLI invocation
-// ---------------------------------------------------------------------------
-
-const geminiBinPath = path.join(__dirname, 'node_modules', '.bin', 'gemini');
-const commandToRun = fs.existsSync(geminiBinPath) ? geminiBinPath : 'gemini';
-
-const GEMINI_TIMEOUT_MS = 120_000; // 2 minutes
-
-const baseGeminiArgs = [
-    '--yolo',
-    '-p', '',
-    '-o', 'stream-json',
-    '--allowed-mcp-server-names', 'openclaw-tools',
-];
-
-for (const mediaPath of mediaPaths) {
-    baseGeminiArgs.push(`@${mediaPath}`);
-}
-
-const geminiArgs = geminiSessionId
-    ? ['--resume', geminiSessionId, ...baseGeminiArgs]
-    : [...baseGeminiArgs];
-
-const env = {
-    ...process.env,
-    GEMINI_SYSTEM_MD: tempSystemMdPath,
-    GEMINI_CLI_HOME: tempHomeDir,
-};
 
 /**
- * Run Gemini CLI using async streams to prevent timeouts and provide real-time feedback.
+ * Spawn Gemini CLI with the provided prompt and optional --resume session,
+ * streaming output back as OpenAI-compatible SSE chunks.
  */
-function runGeminiAsync(args, sessionId) {
+function runGeminiStreaming({ prompt, sessionName, mediaPaths, env, res, requestId, onSessionId }) {
+    const args = ['--yolo', '--allowed-mcp-server-names', 'openclaw-tools', '-o', 'stream-json'];
+
+    if (sessionName) {
+        args.unshift('--resume', sessionName);
+    }
+
+    // Append media paths as positional @ references
+    for (const mp of (mediaPaths || [])) {
+        args.push(`@${mp}`);
+    }
+
+    // Use -p argument directly (safer and more reliable than stdin)
+    args.push('-p', prompt);
+
+    log(`spawn: ${commandToRun} ${args.slice(0, 4).join(' ')} ... (prompt ${prompt.length}ch)`);
+
     const geminiProcess = spawn(commandToRun, args, {
         env,
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    // Write the prompt to stdin and close it to signal EOF
-    if (userMessage) {
-        geminiProcess.stdin.write(userMessage);
-    }
-    geminiProcess.stdin.end();
-
-    let currentSessionId = sessionId;
     let buffer = '';
+    let fullText = '';
 
-    geminiProcess.stdout.on('data', (chunk) => {
+    geminiProcess.stdout.on('data', chunk => {
         buffer += chunk.toString('utf-8');
-        
+
         let boundary = buffer.indexOf('\n');
         while (boundary !== -1) {
             const line = buffer.substring(0, boundary).trim();
@@ -289,97 +333,303 @@ function runGeminiAsync(args, sessionId) {
 
             if (!line) continue;
 
-            try {
-                const json = JSON.parse(line);
-                
-                switch (json.type) {
-                    case 'init':
-                        if (json.session_id) currentSessionId = json.session_id;
-                        break;
-                    
-                    case 'stream':
-                    case 'message':
-                        // Only output assistant's text deltas (or raw stream)
-                        if ((json.type === 'stream' || (json.role === 'assistant' && json.delta)) && json.content) {
-                            process.stdout.write(json.content);
-                        }
-                        break;
-                        
-                    case 'tool_use':
-                        // Provide UX feedback to the OpenClaw user that a tool is running
-                        const toolName = json.tool_name || json.name || 'unknown';
-                        process.stdout.write(`\n\n🔧 [Gemini Runner: Executing ${toolName}...]\n`);
-                        break;
-                        
-                    case 'result':
-                        if (json.session_id) currentSessionId = json.session_id;
-                        break;
-                        
-                    case 'error':
-                        process.stdout.write(`\n⚠️ Gemini Backend Error: ${json.message || JSON.stringify(json)}\n`);
-                        break;
-                        
-                    case 'raw':
-                        if (json.content) process.stdout.write(json.content);
-                        break;
+            let json;
+            try { json = JSON.parse(line); } catch (_) { continue; }
+
+            switch (json.type) {
+                case 'init':
+                    // Capture the session_id that Gemini CLI assigns
+                    if (json.session_id && onSessionId) {
+                        onSessionId(json.session_id);
+                    }
+                    break;
+
+                case 'result':
+                    // Also capture session_id from result events
+                    if (json.session_id && onSessionId) {
+                        onSessionId(json.session_id);
+                    }
+                    break;
+
+                case 'stream':
+                    if (json.content) {
+                        fullText += json.content;
+                        sseWrite(res, {
+                            id: `chatcmpl-${requestId}`,
+                            object: 'chat.completion.chunk',
+                            choices: [{ index: 0, delta: { content: json.content }, finish_reason: null }],
+                        });
+                    }
+                    break;
+
+                case 'message':
+                    if (json.role === 'assistant' && json.delta && json.content) {
+                        fullText += json.content;
+                        sseWrite(res, {
+                            id: `chatcmpl-${requestId}`,
+                            object: 'chat.completion.chunk',
+                            choices: [{ index: 0, delta: { content: json.content }, finish_reason: null }],
+                        });
+                    }
+                    break;
+
+                case 'tool_use': {
+                    const toolName = json.tool_name || json.name || 'unknown';
+                    const notice = `\n\n🔧 [Gemini: executing ${toolName}...]\n`;
+                    fullText += notice;
+                    sseWrite(res, {
+                        id: `chatcmpl-${requestId}`,
+                        object: 'chat.completion.chunk',
+                        choices: [{ index: 0, delta: { content: notice }, finish_reason: null }],
+                    });
+                    break;
                 }
-            } catch (e) {
-                // Not JSON? Might be a raw warning or error from the CLI tool itself
-                process.stdout.write(line + '\n');
+
+                case 'error':
+                    sseWrite(res, {
+                        id: `chatcmpl-${requestId}`,
+                        object: 'chat.completion.chunk',
+                        choices: [{ index: 0, delta: { content: `\n⚠️ ${json.message || JSON.stringify(json)}` }, finish_reason: null }],
+                    });
+                    break;
             }
         }
     });
 
-    let stderrBuffer = '';
-    geminiProcess.stderr.on('data', (chunk) => {
-        stderrBuffer += chunk.toString('utf-8');
-    });
+    let stderr = '';
+    geminiProcess.stderr.on('data', chunk => { stderr += chunk.toString('utf-8'); });
 
-    geminiProcess.on('close', (code) => {
-        // Retry logic: If this was a --resume request and it failed, clear cache and retry fresh
-        if (code !== 0 && sessionId) {
-            console.error(`[adapter] --resume failed (code ${code}). Clearing stale session and retrying...`);
-            delete sessionMap[openclawSessionId];
-            try { fs.writeFileSync(mapFilePath, JSON.stringify(sessionMap, null, 2), 'utf-8'); } catch (_) {}
-            
-            // Clean up temporary system prompt file for the retry
-            try { fs.rmSync(tempSystemMdPath); } catch (_) {}
-            
-            // Re-run fresh (Warning: this might leave a dangling temp file if retry process exits abruptly, but acceptable for this edge case)
-            const freshArgs = [...baseGeminiArgs];
-            for (const mediaPath of mediaPaths) { freshArgs.push(`@${mediaPath}`); }
-            
-            return runGeminiAsync(freshArgs, null);
+    geminiProcess.on('close', code => {
+        if (code !== 0 && stderr.trim()) {
+            log(`Gemini CLI exited ${code}: ${stderr.trim().substring(0, 300)}`);
         }
 
-        // Save the latest valid session ID for the next run
-        if (currentSessionId && currentSessionId !== geminiSessionId) {
-            sessionMap[openclawSessionId] = currentSessionId;
-            try {
-                fs.mkdirSync(path.dirname(mapFilePath), { recursive: true });
-                fs.writeFileSync(mapFilePath, JSON.stringify(sessionMap, null, 2), 'utf-8');
-            } catch (_) {}
-        }
-        
-        // Clean up temporary system prompt file
-        try { fs.rmSync(tempSystemMdPath); } catch (_) {}
-        
-        // If there was stderr output and non-zero exit, display it
-        if (code !== 0 && stderrBuffer.trim()) {
-            process.stdout.write(`\n⚠️ Gemini CLI exited with code ${code}: ${stderrBuffer.trim().substring(0, 500)}`);
-        }
-        
-        process.exit(code);
+        // Send the stop chunk
+        sseWrite(res, {
+            id: `chatcmpl-${requestId}`,
+            object: 'chat.completion.chunk',
+            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+        });
+        res.write('data: [DONE]\n\n');
+        res.end();
     });
 
-    geminiProcess.on('error', (err) => {
-        process.stdout.write(`⚠️ Gemini CLI failed to start: ${err.message}`);
-        try { fs.rmSync(tempSystemMdPath); } catch (_) {}
-        process.exit(1);
+    geminiProcess.on('error', err => {
+        log(`Gemini CLI failed to start: ${err.message}`);
+        sseWrite(res, {
+            id: `chatcmpl-${requestId}`,
+            object: 'chat.completion.chunk',
+            choices: [{ index: 0, delta: { content: `⚠️ Gemini CLI failed to start: ${err.message}` }, finish_reason: 'stop' }],
+        });
+        res.write('data: [DONE]\n\n');
+        res.end();
     });
+
+    // Set a hard timeout
+    const timeout = setTimeout(() => {
+        log('Gemini CLI timed out — killing process');
+        geminiProcess.kill('SIGTERM');
+        sseWrite(res, {
+            id: `chatcmpl-${requestId}`,
+            object: 'chat.completion.chunk',
+            choices: [{ index: 0, delta: { content: '\n⚠️ Gemini CLI timed out.' }, finish_reason: 'stop' }],
+        });
+        res.write('data: [DONE]\n\n');
+        res.end();
+    }, GEMINI_TIMEOUT_MS);
+
+    geminiProcess.on('close', () => clearTimeout(timeout));
 }
 
 // ---------------------------------------------------------------------------
-// 9. Execute Async Stream
+// HTTP server
 // ---------------------------------------------------------------------------
-runGeminiAsync(geminiArgs, geminiSessionId);
+
+function readBody(req) {
+    return new Promise((resolve, reject) => {
+        let data = '';
+        req.on('data', chunk => { data += chunk; });
+        req.on('end', () => {
+            try { resolve(JSON.parse(data)); }
+            catch (e) { reject(new Error('Invalid JSON body')); }
+        });
+        req.on('error', reject);
+    });
+}
+
+const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+
+    // Health check
+    if (req.method === 'GET' && url.pathname === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', adapter: 'gemini-cli-claw' }));
+        return;
+    }
+
+    // Models endpoint (OpenClaw probes this)
+    if (req.method === 'GET' && url.pathname === '/v1/models') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            object: 'list',
+            data: [{ id: 'gemini', object: 'model', owned_by: 'google' }],
+        }));
+        return;
+    }
+
+    // Chat completions
+    if (req.method === 'POST' && url.pathname === '/v1/chat/completions') {
+        let body;
+        try { body = await readBody(req); }
+        catch (e) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+            return;
+        }
+
+        const messages    = body.messages || [];
+        const stream      = body.stream !== false; // default true
+        const sessionKey  = body._openclawSessionKey || body._sessionId || 'default';
+        const workspaceDir = body._workspaceDir || process.cwd();
+
+        // Extract system prompt from the messages array
+        const systemMsg = messages.find(m => m.role === 'system');
+        const systemPrompt = systemMsg ? extractText(systemMsg.content) : '';
+
+        // Extract image paths from the last user message
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+        const lastUserText = lastUserMsg ? extractText(lastUserMsg.content) : '';
+
+        const mediaPaths = [];
+        const mediaAttachedPattern = /\[media attached(?:\s+\d+\/\d+)?:\s*([^\]]+)\]/gi;
+        let mMatch;
+        while ((mMatch = mediaAttachedPattern.exec(lastUserText)) !== null) {
+            const content = mMatch[1];
+            if (/^\d+\s+files?$/i.test(content.trim())) continue;
+            const pathMatch = content.match(/^\s*(.+?\.(?:png|jpe?g|gif|webp|bmp|tiff?|heic|heif))\s*(?:\(|$|\|)/i);
+            if (pathMatch && pathMatch[1]) mediaPaths.push(pathMatch[1].trim());
+        }
+
+        // Separate history (all messages except the last user turn) from the prompt
+        const lastUserIdx = messages.findLastIndex ? messages.findLastIndex(m => m.role === 'user')
+            : (() => { for (let i = messages.length - 1; i >= 0; i--) { if (messages[i].role === 'user') return i; } return -1; })();
+
+        const historyMessages = lastUserIdx > 0 ? messages.slice(0, lastUserIdx) : [];
+        const promptText = lastUserText.replace(/\[media attached[^\]]*\]/gi, '').trim();
+
+        // Set up Gemini environment
+        let env, chatsDir, tempSystemMdPath;
+        try {
+            ({ env, chatsDir, tempSystemMdPath } = prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: `Failed to prepare Gemini env: ${e.message}` }));
+            return;
+        }
+
+        // Look up existing Gemini session ID for this OpenClaw session
+        const sessionMap = loadSessionMap();
+        let geminiSessionId = sessionMap[sessionKey] || null;
+
+        // If we have an existing Gemini session AND history, overwrite its messages
+        if (geminiSessionId && historyMessages.length > 0) {
+            try {
+                const newMessages = convertToGeminiMessages(historyMessages);
+                const ok = overwriteSessionHistory(chatsDir, geminiSessionId, newMessages);
+                if (ok) {
+                    log(`overwrote session ${geminiSessionId} with ${historyMessages.length} pruned msgs`);
+                } else {
+                    log(`session file for ${geminiSessionId} not found — starting fresh`);
+                    geminiSessionId = null; // fall through to fresh start
+                }
+            } catch (e) {
+                log(`Failed to overwrite session: ${e.message} — starting fresh`);
+                geminiSessionId = null;
+            }
+        }
+
+        const requestId = randomId();
+
+        if (stream) {
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            });
+
+            runGeminiStreaming({
+                prompt: promptText,
+                sessionName: geminiSessionId,
+                mediaPaths,
+                env,
+                res,
+                requestId,
+                onSessionId: (capturedId) => {
+                    // Save the mapping so next call can --resume this session
+                    const map = loadSessionMap();
+                    map[sessionKey] = capturedId;
+                    saveSessionMap(map);
+                    log(`captured session_id: ${capturedId} for key: ${sessionKey}`);
+                },
+            });
+
+            // Cleanup temp system prompt file when connection closes
+            res.on('close', () => {
+                try { fs.rmSync(tempSystemMdPath); } catch (_) {}
+            });
+        } else {
+            // Non-streaming: collect all output then respond
+            let fullText = '';
+            const fakeRes = {
+                write: (chunk) => {
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+                        try {
+                            const ev = JSON.parse(line.slice(6));
+                            fullText += ev.choices?.[0]?.delta?.content || '';
+                        } catch (_) {}
+                    }
+                },
+                end: () => {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        id: `chatcmpl-${requestId}`,
+                        object: 'chat.completion',
+                        choices: [{ index: 0, message: { role: 'assistant', content: fullText }, finish_reason: 'stop' }],
+                    }));
+                    try { fs.rmSync(tempSystemMdPath); } catch (_) {}
+                },
+                on: () => {},
+            };
+            runGeminiStreaming({
+                prompt: promptText,
+                sessionName: geminiSessionId,
+                mediaPaths,
+                env,
+                res: fakeRes,
+                requestId,
+                onSessionId: (capturedId) => {
+                    const map = loadSessionMap();
+                    map[sessionKey] = capturedId;
+                    saveSessionMap(map);
+                },
+            });
+        }
+        return;
+    }
+
+    // 404 for everything else
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not found' }));
+});
+
+server.listen(PORT, '127.0.0.1', () => {
+    log(`Gemini CLI adapter listening on http://127.0.0.1:${PORT}`);
+    log(`Using Gemini CLI: ${commandToRun}`);
+});
+
+server.on('error', err => {
+    console.error('[adapter] Server error:', err.message);
+    process.exit(1);
+});
