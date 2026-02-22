@@ -33,6 +33,30 @@ else
     echo "✓ Node.js は既にインストールされています: $(node -v)"
 fi
 
+# Bun ランタイムチェック（オプション・高速化用）
+echo ""
+if command -v bun >/dev/null 2>&1; then
+    echo "✓ Bun は既にインストールされています: $(bun --version)"
+    echo "  → Gemini CLI の起動が高速化されます 🚀"
+else
+    echo "[オプション] Bun ランタイムをインストールすると、Gemini CLI の起動が約2倍高速になります。"
+    echo "  インストールしますか？ [Y/n]"
+    read -r -p "> " install_bun
+    if [[ "$install_bun" =~ ^([yY][eE][sS]|[yY]|)$ ]]; then
+        echo "Bun をインストールしています..."
+        curl -fsSL https://bun.sh/install | bash
+        export PATH="$HOME/.bun/bin:$PATH"
+        echo "✓ Bun のインストールが完了しました: $(bun --version)"
+    else
+        echo "  スキップしました。Node.js で動作します。"
+    fi
+fi
+
 # 対話型 setup.js の呼び出し
+echo ""
 echo "バックエンドのセットアップを開始します..."
-node setup.js
+if command -v bun >/dev/null 2>&1; then
+    bun setup.js
+else
+    node setup.js
+fi

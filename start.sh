@@ -4,6 +4,7 @@
 #
 # 使い方: ./start.sh [--port 3972]
 # OpenClaw起動前にこのスクリプトを実行してアダプタサーバーを立ち上げておく。
+# Bunが利用可能な場合は自動的にBunランタイムを使用する（高速起動）。
 #
 
 set -euo pipefail
@@ -12,6 +13,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${GEMINI_ADAPTER_PORT:-3972}"
 LOG_FILE="${SCRIPT_DIR}/adapter.log"
 PID_FILE="${SCRIPT_DIR}/adapter.pid"
+
+# ランタイム選択: Bun優先、無ければNode.jsにフォールバック
+if command -v bun >/dev/null 2>&1; then
+    RUNTIME="bun"
+    echo "[start.sh] 🚀 Using Bun runtime ($(bun --version))"
+else
+    RUNTIME="node"
+    echo "[start.sh] Using Node.js runtime ($(node --version))"
+fi
 
 # 既に起動中か確認
 if [[ -f "$PID_FILE" ]]; then
@@ -26,7 +36,7 @@ if [[ -f "$PID_FILE" ]]; then
 fi
 
 echo "[start.sh] Starting Gemini CLI adapter on port $PORT ..."
-nohup node "$SCRIPT_DIR/src/server.js" > "$LOG_FILE" 2>&1 &
+nohup $RUNTIME "$SCRIPT_DIR/src/server.js" > "$LOG_FILE" 2>&1 &
 ADAPTER_PID=$!
 echo "$ADAPTER_PID" > "$PID_FILE"
 

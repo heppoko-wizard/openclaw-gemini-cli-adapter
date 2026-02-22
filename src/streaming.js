@@ -13,7 +13,26 @@ const { injectToolHistoryIntoOpenClaw } = require('./injector');
 
 const __dir = path.resolve(__dirname, '..');
 const geminiBinPath = path.join(__dir, 'node_modules', '.bin', 'gemini');
-const commandToRun  = fs.existsSync(geminiBinPath) ? geminiBinPath : 'gemini';
+
+// Bun優先: Bunが利用可能ならBun経由でGemini CLIを起動（高速起動）
+const { execSync } = require('child_process');
+let useBun = false;
+try { execSync('bun --version', { stdio: 'ignore' }); useBun = true; } catch (_) {}
+
+let commandToRun, commandArgs;
+if (useBun && fs.existsSync(geminiBinPath)) {
+    commandToRun = 'bun';
+    commandArgs  = [geminiBinPath];
+    log('Runtime: Bun (gemini via bun)');
+} else if (fs.existsSync(geminiBinPath)) {
+    commandToRun = geminiBinPath;
+    commandArgs  = [];
+    log('Runtime: Node.js (gemini direct)');
+} else {
+    commandToRun = 'gemini';
+    commandArgs  = [];
+    log('Runtime: system gemini');
+}
 
 const GEMINI_TIMEOUT_MS = 180_000; // 3 minutes
 
@@ -89,21 +108,24 @@ function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
  * streaming output back as OpenAI-compatible SSE chunks.
  */
 function runGeminiStreaming({ prompt, sessionName, mediaPaths, env, res, requestId, onSessionId, sessionKey }) {
-    const args = ['--yolo', '--allowed-mcp-server-names', 'openclaw-tools', '-o', 'stream-json'];
+    const geminiArgs = ['--yolo', '--allowed-mcp-server-names', 'openclaw-tools', '-o', 'stream-json'];
 
     if (sessionName) {
-        args.unshift('--resume', sessionName);
+        geminiArgs.unshift('--resume', sessionName);
     }
 
     for (const mp of (mediaPaths || [])) {
-        args.push(`@${mp}`);
+        geminiArgs.push(`@${mp}`);
     }
 
-    args.push(prompt);
+    geminiArgs.push(prompt);
 
-    log(`spawn: ${commandToRun} ${args.slice(0, 4).join(' ')} ... (prompt ${prompt.length}ch)`);
+    // commandArgs: Bun経由の場合は [geminiBinPath] が入る。Node直接の場合は空配列。
+    const finalArgs = [...commandArgs, ...geminiArgs];
 
-    const geminiProcess = spawn(commandToRun, args, {
+    log(`spawn: ${commandToRun} ${finalArgs.slice(0, 4).join(' ')} ... (prompt ${prompt.length}ch)`);
+
+    const geminiProcess = spawn(commandToRun, finalArgs, {
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
     });
