@@ -66,3 +66,14 @@
 
 ### メモ
 - 完全に挙動が安定。ツールコールの伝播・履歴の維持も確認できた。
+
+## セッション 4: `adapter.js` のモジュール分離とIPバインディング修正
+
+### やったこと
+- 939行に肥大化していた `adapter.js` を、責務ごとに6つのファイル（`src/utils.js`, `session.js`, `converter.js`, `injector.js`, `streaming.js`, `server.js`）へリファクタリング。
+- エントリポイントを `src/server.js` に変更し、`start.sh` を修正。不要なゴミファイルや過去の残骸を整理、または `docs/samples/` へ移動した。
+
+### ハマったこと・失敗
+- **現象**: ユーザー環境で「localhost 接続が拒否されました」というエラーが発生。`pgrep` やログ上ではGatewayもAdapterも正常稼働していた。
+- **原因**: Node.jsの `server.listen(PORT, '127.0.0.1')` が明示的にIPv4にバインドしていた一方、ユーザーのアクセス環境（あるいは内部の名前解決）が `localhost` をIPv6の `::1` として解決したため、接続が弾かれた可能性が高い。また、Gatewayも稼働していたが、Websocket用の18789ポートへブラウザで通常のHTTPアクセス（GET `/`）をしたためWebsocketプロトコル外として拒否された可能性も高い。
+- **対処**: Adapter側は `127.0.0.1` 指定を外し、`server.listen(PORT, ...)` として全てのインターフェース（IPv4 / IPv6 両方）でリッスンするよう修正。Gatewayプロセスは `ps` コマンドで生存を確認した。

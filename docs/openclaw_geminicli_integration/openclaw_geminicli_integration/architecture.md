@@ -24,9 +24,9 @@ graph TD
 - **役割**: 実際に推論を行い、指定されたツールを実行する。
 - **起動方法**: Adapterから `spawn` される (`--yolo --resume <UUID> -o stream-json`)
 
-### コンポーネントC: Gemini CLI Adapter (`adapter.js`)
-- **役割**: 両者の仕様の違い（API形式、履歴保持の仕組み、ストリーミング形式）を吸収するプロキシ。
-- **起動方法**: `start.sh` または `node adapter.js` (Port: 3972)
+### コンポーネントC: Gemini CLI Adapter (`src/server.js` ほか)
+- **役割**: 両者の仕様の違い（API形式、履歴保持の仕組み、ストリーミング形式）を吸収するプロキシ。肥大化を防ぐため `src/` 配下に責務ごと（session, converter, injector, streaming）にモジュール分割されている。
+- **起動方法**: `start.sh` または `node src/server.js` (Port: 3972)
 
 ## 3. 重要なファイルパス
 
@@ -36,6 +36,7 @@ graph TD
 | マッピング | `~/.gemini/openclaw-session-map.json` | OpenClawのKeyとGemini CLIのUUIDを紐付け |
 | ログ | `/tmp/adapter_last_req.json` | OpenClawから飛んできた生リクエスト（デバッグ用） |
 | ログ | `adapter.log` | アダプタ自身の動作ログ（重要） |
+| 構成 | `gemini-cli-claw/src/` | アダプタのコアロジック群（server, streaming, injector 等）|
 
 ## 4. データフロー（ツール履歴注入の重要プロセス）
 

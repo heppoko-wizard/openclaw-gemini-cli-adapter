@@ -26,14 +26,14 @@ OpenClaw ↔ Gemini CLI 連携において、「会話が通らない」「ツ�
   * **確認ポイント**:
     * `messages` 配列の中に、過去のツール実行結果（`role: "tool"` 等）が含まれているか（記憶喪失の確認）
 
-* **`~/.gemini/tmp/chats/<UUID>.json`**
+* **`~/.openclaw/gemini-sessions/<Session_Key>/.gemini/tmp/gemini-cli-claw/chats/<UUID>.json`**
   * **役割**: Gemini CLIが内部で保持している会話履歴。
   * **確認ポイント**: Adapterがこのファイルに正常に `history` を上書きできているか。
 
 ## 3. 設定・マッピングファイル (Configs & Maps)
 セッションの紐付けや接続先の設定が正しいか確認します。
 
-* **`~/.gemini/openclaw-session-map.json`**
+* **`~/.openclaw/gemini-session-map.json`**
   * **役割**: OpenClawのセッションキー（ユーザー/チャット単位）とGemini CLIのUUIDの対応表。
   * **確認ポイント**: マッピングが壊れていないか、意図しないUUIDに切り替わっていないか。
 

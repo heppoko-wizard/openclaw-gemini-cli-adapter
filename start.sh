@@ -26,7 +26,7 @@ if [[ -f "$PID_FILE" ]]; then
 fi
 
 echo "[start.sh] Starting Gemini CLI adapter on port $PORT ..."
-nohup node "$SCRIPT_DIR/adapter.js" > "$LOG_FILE" 2>&1 &
+nohup node "$SCRIPT_DIR/src/server.js" > "$LOG_FILE" 2>&1 &
 ADAPTER_PID=$!
 echo "$ADAPTER_PID" > "$PID_FILE"
 
