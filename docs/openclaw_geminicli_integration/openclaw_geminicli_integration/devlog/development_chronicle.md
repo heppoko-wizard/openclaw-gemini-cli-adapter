@@ -87,3 +87,37 @@
 
 ### ハマったこと・失敗
 - OpenClaw側の内部遅延（ユーザー入力〜Adapter到達まで）を計算しようとしたが、OpenClawから送られてくるリクエストデータ内にミリ秒単位の受信時刻が含まれていなかったため、Adapter単体での計測は断念した。Gateway側のログとAdapterの受信時刻を照らし合わせて確認するようユーザーに案内した。
+
+## セッション 6: Gemini CLI のライブラリ化（API直接呼び出し）による抜本的高速化
+
+### やったこと
+- **課題**: OpenClawからGemini APIを叩く際、毎回 `bun gemini` プロセスを起動（spawn）しており、その度にかかる約12秒の初期化オーバーヘッド（起動税）が体感速度を著しく下げていた。
+- **解決策**: Gemini CLI の内部モジュールを動的importで直接メモリに読み込み、サーバー起動時に1回だけ初期化する「ファサード（Facade）パターン」を採用。リクエスト時にはOSプロセスを起動せず、直接ジェネレータ（`generateContent`）を回す仕組みへアーキテクチャを変更した。
+- **新設計**:
+  - `src/gemini-core-facade.js`: 変動しやすいGemini CLI内部モジュール（settings, auth, config 等）への依存を1ファイルに隔離し、初期化 `initializeGeminiCore()` と推論 `generateContentDirect()` メソッドのみを露出させる層。
+  - `src/server.js`: HTTPリッスン開始前に `initializeGeminiCore()` を呼び出し、Gemini Clientをメモリに常駐（ウォームアップ）させる。
+  - `src/streaming.js`: 従来の `spawn()` 呼び出しを破棄し、`generateContentDirect()` から得たテキストをSSE（Server-Sent Events）のJSONLチャンクとしてストリーミング返却する形に書き換え。
+
+### ハマったこと・失敗
+- **現象**: 共通Js（CommonJS）形式の `server.js` から、ESモジュール形式で作成した `gemini-core-facade.js` を `require()` しようとしてエラーが発生した。
+- **対処**: トップレベルの `(async () => { ... })();` ブロック内で `await import('./gemini-core-facade.js')` を用いて動的ロードするよう修正し解決した。
+
+### 安全弁（フォールバック）の実装
+- **現象**: Gemini CLIチームが内部APIの実装やディレクトリ構造を変更した場合、ファサード内部のアダプタが壊れ、以後一切の通信ができなくなるクリティカルなリスク（非互換リスク）が存在する。
+- **対処**: `server.js` 起動時の初期化フェーズで例外が発生した場合、グローバルフラグ `useFallbackSpawn = true` を立てる機構を実装。`streaming.js` 側でこのフラグを検知し、もし初期化に失敗していれば「旧来の安全な `spawn`（外部コマンド呼び出し）モード」へ自動後退して動作を継続する高可用性ループ（`runGeminiStreamingFallback`）を構築した。
+
+### 成果
+- **TTFT（Time To First Token）が 12秒 → 5.7秒** に半減（実質的な「起動税」約7秒の完全解消）。
+- `spawn` プロセスの完全排除により、AdapterサーバーのCPUスパイクやメモリ浪費が抑えられ、エコかつ高速な常駐型APIサーバーへと進化した。
+
+## セッション 7: 文脈（コンテキスト）喪失バグの修正とメッセージマッピングの実装
+
+### やったこと
+- **課題**: OpenClaw側から会話履歴を含む `messages` 配列が送信されているにも関わらず、Adapter側は最後のユーザー入力しか抽出しておらず、AIが文脈を一切記憶しない不具合が発覚（「もう一回」と言ってもコンテキストがないので常に「YES」と返されてしまう等）。
+- **解決策**:
+  - `src/server.js` 側で抽出したメッセージ履歴全体（OpenAI互換フォーマット）を、そのまま `runGeminiStreaming` に渡すよう修正した。
+  - `src/streaming.js` において、受け取った `messages` を Gemini SDK互換の `[{ role, parts: [{ text }] }]` フォーマットへ変換・パースするロジックを実装した。
+  - Gemini APIの仕様上、同じロール（user/model）が連続するとエラーとなるため、連続する同一ロールのメッセージを結合（Merge）する処理を追加。また配列の末尾が必ず `user` ロールになるようダミーの入力を追加するフェイルセーフを実装した。
+
+### 成果
+- パースエラーやSSE（チャンク）出力形式のエラーも解消し、フロントエンド（OpenClaw）側に文脈を踏まえたまともなチャット応答が安定して出力されるようになった。

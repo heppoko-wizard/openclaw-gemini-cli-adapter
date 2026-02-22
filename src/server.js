@@ -148,6 +148,7 @@ const server = http.createServer(async (req, res) => {
 
             runGeminiStreaming({
                 prompt: promptText,
+                messages: historyMessages.concat(messages.slice(lastUserIdx)),
                 sessionName: geminiSessionId,
                 mediaPaths,
                 env,
@@ -192,6 +193,7 @@ const server = http.createServer(async (req, res) => {
             };
             runGeminiStreaming({
                 prompt: promptText,
+                messages: historyMessages.concat(messages.slice(lastUserIdx)),
                 sessionName: geminiSessionId,
                 mediaPaths,
                 env,
@@ -213,9 +215,31 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ error: 'Not found' }));
 });
 
-server.listen(PORT, () => {
-    log(`Gemini CLI adapter listening on port ${PORT}`);
-});
+// グローバルなフォールバックフラグの定義（streaming.js等で参照する）
+global.useFallbackSpawn = false;
+
+(async () => {
+    let initializeGeminiCore;
+    try {
+        const facade = await import('./gemini-core-facade.js');
+        initializeGeminiCore = facade.initializeGeminiCore;
+    } catch (err) {
+        console.error("Failed to load gemini-core-facade.js", err);
+        process.exit(1);
+    }
+    try {
+        log('Initializing Gemini Core... This may take up to 15 seconds.');
+        await initializeGeminiCore();
+        log('Gemini Core initialized successfully.');
+    } catch (err) {
+        log(`Failed to initialize Gemini Core: ${err.message}. Enabling fallback spawn mode.`);
+        global.useFallbackSpawn = true;
+    }
+
+    server.listen(PORT, () => {
+        log(`Gemini CLI adapter listening on port ${PORT}`);
+    });
+})();
 
 server.on('error', err => {
     console.error('[adapter] Server error:', err.message);
