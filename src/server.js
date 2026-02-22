@@ -43,6 +43,7 @@ function readBody(req) {
 const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     log(`Incoming request: ${req.method} ${url.pathname}`);
+    if (req.method === 'POST') log(`Headers: ${JSON.stringify(req.headers)}`);
 
     // Health check
     if (req.method === 'GET' && url.pathname === '/health') {

@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 
 function log(...args) {
-    console.error('[adapter]', ...args);
+    console.error(`[${new Date().toISOString()}] [adapter]`, ...args);
 }
 
 function randomId() {
