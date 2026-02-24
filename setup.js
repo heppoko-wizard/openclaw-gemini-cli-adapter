@@ -23,38 +23,103 @@ const GEMINI_CREDS_DIR = path.join(os.homedir(), ".gemini");
 // Messages vocabulary
 const MSG = {
     ja: {
+        selectLang: "Select language / 言語選択 / 选择语言 [1] English [2] 日本語 [3] 简体中文 (1/2/3): ",
         welcome: "OpenClaw Gemini Backend セットアップへようこそ！",
         checkOpenclaw: "OpenClaw 本体のインストール状態をチェックしています...",
+        notFoundOpenclaw: "OpenClaw 本体が見つかりません。",
+        suggestClone: "自動的にダウンロード (git clone) しますか？ (Y/n): ",
+        cloning: "OpenClaw をクローン中...",
+        cloneFail: "エラー: OpenClaw のダウンロードに失敗しました。",
+        cloneSuccess: "✓ OpenClaw のダウンロード完了",
+        setupAborted: "セットアップを中断しました。",
+        relocationTip: "すでに OpenClaw がインストールされている場合は、この '{RENAME_ME}' フォルダを OpenClaw のルートディレクトリ直下に配置してから再度実行してください。",
+        placementEx: "配置例:",
         installOpenclaw: "OpenClaw がビルドされていないようです。ビルドを実行しますか？ (Y/n): ",
         buildingOpenclaw: "OpenClaw をビルド中 (npm install && npm run build)...",
+        buildOpenclawFail: "エラー: OpenClaw のビルドに失敗しました。セットアップを継続できません。",
         buildOpenclawSuccess: "✓ OpenClaw のビルド完了",
         checkGeminiDep: "Gemini Backend (このフォルダ) の npm パッケージをインストール中...",
+        npmFail: "エラー: npm install に失敗しました。",
         installDepSuccess: "✓ npm 依存関係のインストール完了",
+        syncModels: "Gemini モデルを OpenClaw に同期中...",
+        syncFail: "警告: Gemini モデルの同期に失敗しました。モデルが OpenClaw UI に表示されない可能性があります。",
+        syncSuccess: "✓ モデルの同期完了",
         registerAdapter: "openclaw.json に gemini-adapter を登録しています...",
         registerAdapterSuccess: "✓ gemini-adapter の登録完了",
         checkAuth: "Gemini CLI の認証状況をチェックしています...",
         authNeeded: "Gemini API の認証が見つかりません。今すぐログインしますか？ (Y/n): ",
         authStart: "認証を開始します。ターミナルに表示される指示に従ってログインしてください...",
         authSuccess: "✓ Gemini 認証完了",
+        authMissingTip: "情報: 認証資格情報がまだ見つかりません。後で手動で `npx @google/gemini-cli login` を実行する必要があるかもしれません。",
+        configTip: "まだ設定していない場合は、~/.openclaw/openclaw.json に以下を追加してください:",
         finish: "セットアップがすべて完了しました！",
         tryIt: "試してみる: node ../scripts/run-node.mjs agent -m 'こんにちは' --local"
     },
     en: {
+        selectLang: "Select language / 言語選択 / 选择语言 [1] English [2] 日本語 [3] 简体中文 (1/2/3): ",
         welcome: "Welcome to OpenClaw Gemini Backend Setup!",
         checkOpenclaw: "Checking OpenClaw base installation...",
+        notFoundOpenclaw: "OpenClaw repository not found in parent directory.",
+        suggestClone: "Download OpenClaw automatically? (Y/n): ",
+        cloning: "Cloning OpenClaw...",
+        cloneFail: "Error: Failed to download OpenClaw.",
+        cloneSuccess: "✓ OpenClaw downloaded.",
+        setupAborted: "Setup aborted.",
+        relocationTip: "If OpenClaw is already installed, please move this '{RENAME_ME}' folder directly into your OpenClaw root directory and run again.",
+        placementEx: "Example:",
         installOpenclaw: "OpenClaw does not appear to be built. Build it now? (Y/n): ",
         buildingOpenclaw: "Building OpenClaw (npm install && npm run build)...",
+        buildOpenclawFail: "Error: OpenClaw build failed. Setup cannot continue.",
         buildOpenclawSuccess: "✓ OpenClaw build complete",
         checkGeminiDep: "Installing npm dependencies for Gemini Backend...",
+        npmFail: "Error: npm install failed.",
         installDepSuccess: "✓ npm dependencies installed",
+        syncModels: "Syncing Gemini models to OpenClaw...",
+        syncFail: "Warning: Failed to sync Gemini models. Models might not appear in OpenClaw UI.",
+        syncSuccess: "✓ Models synced",
         registerAdapter: "Registering gemini-adapter in openclaw.json...",
         registerAdapterSuccess: "✓ gemini-adapter registered",
         checkAuth: "Checking Gemini CLI authentication...",
         authNeeded: "Gemini API authentication not found. Login now? (Y/n): ",
         authStart: "Starting authentication. Please follow the instructions to login...",
         authSuccess: "✓ Gemini authentication complete",
+        authMissingTip: "Info: Authentication credentials still not found. You may need to manually run `npx @google/gemini-cli login` later.",
+        configTip: "If you haven't already, add this to ~/.openclaw/openclaw.json:",
         finish: "Setup is fully complete!",
         tryIt: "Try it out: node ../scripts/run-node.mjs agent -m 'hello' --local"
+    },
+    zh: {
+        selectLang: "Select language / 言語選択 / 选择语言 [1] English [2] 日本語 [3] 简体中文 (1/2/3): ",
+        welcome: "欢迎使用 OpenClaw Gemini 后端安装程序！",
+        checkOpenclaw: "正在检查 OpenClaw 本体的安装状态...",
+        notFoundOpenclaw: "未发现 OpenClaw 本体。",
+        suggestClone: "是否自动下载 (git clone)？ (Y/n): ",
+        cloning: "正在克隆 OpenClaw...",
+        cloneFail: "错误：下载 OpenClaw 失败。",
+        cloneSuccess: "✓ OpenClaw 下载完成",
+        setupAborted: "安装已中止。",
+        relocationTip: "如果已经安装了 OpenClaw，请将此 '{RENAME_ME}' 文件夹直接移动到 OpenClaw 根目录下并重新运行。",
+        placementEx: "配置示例：",
+        installOpenclaw: "OpenClaw 似乎尚未构建。现在构建吗？ (Y/n): ",
+        buildingOpenclaw: "正在构建 OpenClaw (npm install && npm run build)...",
+        buildOpenclawFail: "错误：OpenClaw 构建失败。无法继续安装。",
+        buildOpenclawSuccess: "✓ OpenClaw 构建完成",
+        checkGeminiDep: "正在安装 Gemini 后端（本文件夹）的 npm 依赖包...",
+        npmFail: "错误：npm install 失败。",
+        installDepSuccess: "✓ npm 依赖项安装完成",
+        syncModels: "正在将 Gemini 模型同步到 OpenClaw...",
+        syncFail: "警告：同步 Gemini 模型失败。模型可能不会出现在 OpenClaw UI 中。",
+        syncSuccess: "✓ 模型同步完成",
+        registerAdapter: "正在 openclaw.json 中注册 gemini-adapter...",
+        registerAdapterSuccess: "✓ gemini-adapter 注册完成",
+        checkAuth: "正在检查 Gemini CLI 的身份验证状态...",
+        authNeeded: "未发现 Gemini API 身份验证。现在登录吗？ (Y/n): ",
+        authStart: "开始身份验证。请按照终端显示的说明进行登录...",
+        authSuccess: "✓ Gemini 身份验证完成",
+        authMissingTip: "提示：仍未发现身份验证凭据。您稍后可能需要手动运行 `npx @google/gemini-cli login`。",
+        configTip: "如果尚未配置，请将以下内容添加到 ~/.openclaw/openclaw.json：",
+        finish: "安装全部完成！",
+        tryIt: "尝试运行：node ../scripts/run-node.mjs agent -m '你好' --local"
     }
 };
 
@@ -72,14 +137,24 @@ function runCommand(command, cwd) {
 }
 
 async function main() {
-    console.log("=================================================");
-    
-    // 0. Language selection
-    const lang = await question("Select language / 言語を選択してください [1] English [2] 日本語 (1/2): ");
-    if (lang.trim() === '2') {
+    // 0. Language selection (Detection & Choice)
+    const envLang = (process.env.LANG || "").toLowerCase();
+    if (envLang.startsWith("ja")) {
         L = MSG.ja;
+    } else if (envLang.startsWith("zh")) {
+        L = MSG.zh;
     }
-    
+
+    console.log("=================================================");
+    const langInput = await question(L.selectLang);
+    if (langInput.trim() === '2') {
+        L = MSG.ja;
+    } else if (langInput.trim() === '3') {
+        L = MSG.zh;
+    } else if (langInput.trim() === '1') {
+        L = MSG.en;
+    }
+
     console.log("\n" + L.welcome);
     console.log("=================================================\n");
 
@@ -102,28 +177,29 @@ async function main() {
     }
 
     if (!isOpenclawPresent) {
-        console.log("OpenClaw repository not found in parent directory.");
-        const dlAns = await question("OpenClaw本体が見つかりません。自動的にダウンロード (git clone) しますか？ / Download OpenClaw now? (Y/n): ");
+        console.log("[!] " + L.notFoundOpenclaw);
+        const dlAns = await question(L.suggestClone);
         if (dlAns.trim() === '' || dlAns.trim().toLowerCase() === 'y') {
-            console.log("Cloning OpenClaw...");
+            console.log(L.cloning);
             // Clone into parent directory's 'openclaw' folder if parent is not openclaw itself
             const runClone = runCommand("git clone https://github.com/openclaw/openclaw.git openclaw-core", SCRIPT_DIR);
             if (runClone.status !== 0) {
-                console.error("Error: Failed to download OpenClaw.");
+                console.error("[!] " + L.cloneFail);
                 process.exit(1);
             }
             // Update OPENCLAW_ROOT to the newly cloned directory
             OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, "openclaw-core");
             isOpenclawPresent = true;
-            console.log("✓ OpenClaw downloaded.\n");
+            console.log(L.cloneSuccess + "\n");
         } else {
-            console.error("\n[!] " + (lang.trim() === '2' ? "セットアップを中断しました。" : "Setup aborted."));
-            console.error(lang.trim() === '2' ? "すでに OpenClaw がインストールされている場合は、この 'gemini-cli-claw' フォルダを OpenClaw のルートディレクトリ直下に配置してから再度 setup.js または install.sh を実行してください。" : "If OpenClaw is already installed, please move this 'gemini-cli-claw' folder directly into your OpenClaw root directory and run setup.js again.");
-            console.error(lang.trim() === '2' ? "配置例:" : "Example:");
+            const folderName = path.basename(SCRIPT_DIR);
+            console.error("\n[!] " + L.setupAborted);
+            console.error(L.relocationTip.replace("{RENAME_ME}", folderName));
+            console.error(L.placementEx);
             console.error("  openclaw/");
             console.error("  ├── src/");
             console.error("  ├── package.json");
-            console.error("  └── gemini-cli-claw/   <-- ここに配置 / Place it here");
+            console.error(`  └── ${folderName}/   <-- ${L.ja ? "ここ" : (L.zh ? "这里" : "here")}`);
             console.error("      └── setup.js\n");
             process.exit(1);
         }
@@ -153,18 +229,18 @@ async function main() {
     console.log("[2/4] " + L.checkGeminiDep);
     const depRes = runCommand("npm install", SCRIPT_DIR);
     if (depRes.status !== 0) {
-        console.error("Error: npm install failed for gemini-cli-claw.");
+        console.error("[!] " + L.npmFail);
         process.exit(1);
     }
     console.log(L.installDepSuccess + "\n");
 
     // 2.5 Sync Gemini Models to OpenClaw
-    console.log("[~] Syncing Gemini models to OpenClaw...");
+    console.log("[~] " + L.syncModels);
     const syncRes = runCommand("node scripts/update_models.js", SCRIPT_DIR);
     if (syncRes.status !== 0) {
-        console.error("Warning: Failed to sync Gemini models. Models might not appear in OpenClaw UI.");
+        console.error("(!) " + L.syncFail);
     }
-    console.log("✓ Models synced\n");
+    console.log(L.syncSuccess + "\n");
 
     // 3. Register adapter in openclaw.json
     console.log("[3/4] " + L.registerAdapter);
@@ -229,11 +305,11 @@ async function main() {
             if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2)) {
                 console.log(L.authSuccess + "\n");
             } else {
-                console.log("Info: Authentication credentials still not found. You may need to manually run `npx @google/gemini-cli login` later.\n");
+                console.log(L.authMissingTip + "\n");
             }
         }
     } else {
-        console.log(L.authSuccess + " (Already authenticated / 認証済)\n");
+        console.log(L.authSuccess + " (Skipped / 読込済)\n");
     }
 
     console.log("=================================================");
@@ -241,7 +317,7 @@ async function main() {
     
     // Write out how to use it
     console.log("");
-    console.log("If you haven't already, add this to ~/.openclaw/openclaw.json:");
+    console.log(L.configTip);
     console.log('  "agents": {');
     console.log('    "defaults": {');
     console.log('      "provider": "gemini-adapter"');
