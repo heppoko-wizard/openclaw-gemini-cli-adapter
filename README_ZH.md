@@ -119,8 +119,8 @@ install.bat
 
 | 组件 | 版本 |
 |---|---|
-| **OpenClaw** | v2026.2.23 |
-| **Gemini CLI** | v0.29.7 |
+| **OpenClaw** | v2026.2.20 |
+| **Gemini CLI** | v0.29.5 |
 | **Node.js** | v24.13.0 |
 | **OS** | Linux (x86_64) |
 
