@@ -2,6 +2,8 @@
 
 [English](README.md) | [中文](README_ZH.md) | [日本語](README_JA.md)
 
+[![最新リリース](https://img.shields.io/github/v/release/heppoko-wizard/openclaw-gemini-cli-adapter?label=%E6%9C%80%E6%96%B0%E3%83%AA%E3%83%AA%E3%83%BC%E3%82%B9&style=flat-square)](https://github.com/heppoko-wizard/openclaw-gemini-cli-adapter/releases/latest)
+
 [OpenClaw](https://github.com/mariozechner/openclaw) のバックエンド推論エンジンとして、Google公式の [Gemini CLI](https://github.com/google/gemini-cli) を直接接続するためのアダプタツールです。
 Gemini CLI そのものに「自立駆動型エージェント」としての側面を与え、OpenClawの強力な自律性とスキル群をGemini CLIから直接扱えるようにします。
 

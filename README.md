@@ -4,6 +4,8 @@
 
 [English](README.md) | [中文](README_ZH.md) | [日本語](README_JA.md)
 
+[![Latest Release](https://img.shields.io/github/v/release/heppoko-wizard/openclaw-gemini-cli-adapter?style=flat-square)](https://github.com/heppoko-wizard/openclaw-gemini-cli-adapter/releases/latest)
+
 An adapter tool designed to directly connect Google's official [Gemini CLI](https://github.com/google/gemini-cli) as the backend inference engine for [OpenClaw](https://github.com/mariozechner/openclaw).
 It gives the Gemini CLI itself the aspect of an "autonomous agent," allowing OpenClaw's powerful autonomy and skill sets to be controlled directly from the Gemini CLI.
 

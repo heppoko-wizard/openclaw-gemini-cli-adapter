@@ -4,6 +4,8 @@
 
 [English](README.md) | [中文](README_ZH.md) | [日本語](README_JA.md)
 
+[![最新版本](https://img.shields.io/github/v/release/heppoko-wizard/openclaw-gemini-cli-adapter?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&style=flat-square)](https://github.com/heppoko-wizard/openclaw-gemini-cli-adapter/releases/latest)
+
 作为一个适配器工具，它旨在将 Google 官方的 [Gemini CLI](https://github.com/google/gemini-cli) 直接连接到 [OpenClaw](https://github.com/mariozechner/openclaw) 作为其后端的推理引擎。
 它赋予了 Gemini CLI 本身作为“自主驱动型代理”的特性，并让您能够直接从 Gemini CLI 操控 OpenClaw 强大的自主能力和技能组。
 
