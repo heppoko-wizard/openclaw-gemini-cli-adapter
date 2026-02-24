@@ -83,7 +83,7 @@ OpenClawの設定 (`openclaw.json`) にて、メインの推論エンジンをGe
 
 ## 制限事項・トラブルシューティング
 
-*   **APIの利用制限 (Rate Limit)**: 無料のGemini APIを利用している場合、短時間の過度なリクエストにより制限（429 Too Many Requests）に引っかかる場合があります。
+*   **APIの利用制限 (Rate Limit)**: 無料のGemini API/Googleアカウントを利用している場合、短時間の過度なリクエストにより制限（429 Too Many Requests）に引っかかる場合があります。
 *   **認証の有効期限**: Gemini CLIのログインセッションが切れた場合は、再度当該ディレクトリ（`gemini-cli-claw`内）で `npx gemini login` を実行して再認証を行ってください。
 *   **使用不能なツールと理由**: 以下のツールは現在、競合回避や構成上の制約により除外されています。
     *   **ファイル操作・実行系 (`read`, `write`, `edit`, `exec`, `bash`, `process`)**: Gemini CLI 標準ツール（ホスト権限）と機能が重複し、名称が競合するため除外されています。
@@ -91,7 +91,7 @@ OpenClawの設定 (`openclaw.json`) にて、メインの推論エンジンをGe
 
 ## 開発ロードマップ (Roadmap)
 
-現在、このアダプタはリアルタイムストリーミング・ツール統合・ストップ機能を含むコア機能が安定稼働しています。アーキテクチャ上の既知課題は [KNOWN_ISSUES.md](KNOWN_ISSUES.md) を参照してください。
+現在、このアダプタはリアルタイムストリーミング・ツール統合・ストップ機能を含むコア機能が安定稼働しています。未着手の課題や改善案については [backlog.md](docs/openclaw_geminicli_integration/openclaw_geminicli_integration/backlog.md) を参照してください。
 
 今後の主な改修として以下を計画しています。
 
