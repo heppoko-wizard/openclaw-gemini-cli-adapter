@@ -288,3 +288,25 @@
 
 ### 変更したファイル
 - `src/runner-pool.js` — `openclaw-tools` の MCP 定義に `"trust": true` を追加
+
+---
+
+## セッション 15: プロンプト中止（Abort）機能とランタイムハイブリッドアーキテクチャ (2026-02-24)
+
+### やったこと
+- **通信切断の検知課題**: クライアント（OpenClaw 等）が `/stop` やネットワーク切断で通信を閉じた際、裏で実行中の Gemini CLI プロセスが残り続ける（ゾンビプロセス化）問題の解決。
+- **実装アプローチの検証**: 当初 `req.on('close')` や `res.destroyed` を Bun 環境で試行したが、発火タイミングの異常（POST body 消費完了で発火など）から Bun の HTTP サーバーでは TCP レイヤの切断検知が事実上不可能と判断。
+- **新アーキテクチャの導入（ハイブリッド）**: 
+  - 受付サーバー (`src/server.js`): 確実な TCP 切断検知 (`res.on('close')`) を行うために **Node.js** ランタイムで起動するよう `start.sh` を修正。
+  - AI処理プロセス (`src/runner.js`): 高速起動（Warm Standby）の恩恵を維持するため、引き続き **Bun** で `spawn()` するプール構成を堅持。
+- **Abort機能の完成**: Node.js レイヤーでクライアントの異常切断（`res.writableEnded === false`）をフックし、実行中の Bun (Gemini CLI) プロセスへ `SIGTERM` → `SIGKILL` を送る仕組みが完全に動作することを確認。
+
+### 発見・学んだこと
+- **Bun の HTTP サーバーの限界**: Bun は極めて高速だが、`req.on('close')` イベントが TCP の実切断ではなくストリーム終了（body の消費完了）を意味するなど、Node.js との完全な互換性がない部分がある。本番向けの細かなフォールトトレランス（異常系の検知）には Node.js が依然として信頼性が高い。
+- **プロセスプールの弾力性**: `RunnerPool` アーキテクチャにより、実行プロセスを容赦なく `SIGKILL` しても、プール機能が直ちに新しいプロセスを `spawn()` してスタンバイ状態にするため、全体のシステム安定性が損なわれない（Self-Healing 特性）。
+
+### 変更したファイル
+- `start.sh` — `server.js` の起動ランタイムを Node.js に固定
+- `src/server.js` — Node.js 用の `res.on('close')` フックと、`abortHandle` の遅延バインディングを実装
+- `src/streaming.js` — Abort 実行関数 `killRunner` を Caller（サーバー）へ返す変更
+- `src/runner-pool.js` — クライアントが切断し、まだ Runner がアサインされる前の pending キューをキャンセルする `cancelPending()` メソッドの追加

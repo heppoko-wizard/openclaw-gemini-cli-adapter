@@ -88,7 +88,7 @@ const { runnerPool } = require('./runner-pool.js');
  * Spawn Gemini CLI with the provided prompt and optional --resume session,
  * streaming output back as OpenAI-compatible SSE chunks via RunnerPool.
  */
-async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaPaths, env, res, requestId, onSessionId, sessionKey }) {
+async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaPaths, env, req, res, requestId, onSessionId, sessionKey }) {
     const responseId = `resp_${requestId}`;
     const perfStart = Date.now();
     let perfFirstToken = null;
@@ -105,6 +105,9 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
             finish_reason: null
         }]
     });
+
+    // killRunner は try ブロック内で runner 取得後に代入される
+    let killRunner = null;
 
     try {
         log(`[adapter] Acquiring runner for sessionKey: ${sessionKey}`);
@@ -145,6 +148,19 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
             env: env,
             mediaPaths: mediaPaths
         });
+
+        // --- Abort ハンドル: 外部（server.js）から Runner を停止するためのインターフェース ---
+        let aborted = false;
+        killRunner = () => {
+            if (aborted) return;
+            aborted = true;
+            log('[abort] Client disconnected. Killing runner process.');
+            try { runner.kill('SIGTERM'); } catch (_) {}
+            setTimeout(() => { try { runner.kill('SIGKILL'); } catch (_) {} }, 3000);
+        };
+
+        // Runner が正常終了した場合は aborted フラグを立てて二重 kill を防止
+        runner.on('close', () => { aborted = true; });
 
         let buffer = '';
         let fullText = '';
@@ -305,6 +321,9 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
         res.write('data: [DONE]\n\n');
         res.end();
     }
+
+    // server.js側から req.on('close') 経由で呼ばれる kill ハンドルを返す
+    return { kill: killRunner };
 }
 
 module.exports = { prepareGeminiEnv, runGeminiStreaming };

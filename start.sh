@@ -14,14 +14,12 @@ PORT="${GEMINI_ADAPTER_PORT:-3972}"
 LOG_FILE="${SCRIPT_DIR}/logs/adapter.log"
 PID_FILE="${SCRIPT_DIR}/logs/adapter.pid"
 
-# ランタイム選択: Bun優先、無ければNode.jsにフォールバック
-if command -v bun >/dev/null 2>&1; then
-    RUNTIME="bun"
-    echo "[start.sh] 🚀 Using Bun runtime ($(bun --version))"
-else
-    RUNTIME="node"
-    echo "[start.sh] Using Node.js runtime ($(node --version))"
-fi
+# ランタイム選択: server.js は必ず Node.js を使用
+# Bun の HTTP サーバーは req.on('close') が TCP 切断ではなく body 消費完了で発火するため、
+# クライアント切断検知（Abort 機能）が正しく動作しない。
+# Runner プロセスは runner-pool.js 内の spawn で Bun を使用する。
+RUNTIME="node"
+echo "[start.sh] Using Node.js runtime ($(node --version)) for server.js"
 
 # 既に起動中か確認
 if [[ -f "$PID_FILE" ]]; then

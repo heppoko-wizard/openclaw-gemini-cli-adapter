@@ -177,6 +177,26 @@ class RunnerPool {
         // 呼び出し元（Streaming層）へ、入出力ストリームを持つRunnerプロセスを返す
         resolve(runner);
     }
+
+    /**
+     * キューで待機中のリクエストをキャンセルする。
+     * HTTP 接続が切断された場合に、まだ Runner が割り当てられていない
+     * リクエストをキューから除去するために使用する。
+     * @param {string} promptId キャンセル対象のプロンプトID
+     * @returns {boolean} キャンセルに成功したか
+     */
+    cancelPending(promptId) {
+        const idx = this.pendingRequests.findIndex(
+            p => p.request.promptId === promptId
+        );
+        if (idx !== -1) {
+            const removed = this.pendingRequests.splice(idx, 1)[0];
+            removed.reject(new Error('Request cancelled: client disconnected'));
+            console.log(`[Pool] Cancelled pending request: ${promptId}`);
+            return true;
+        }
+        return false;
+    }
 }
 
 // シングルトンとしてエクスポート

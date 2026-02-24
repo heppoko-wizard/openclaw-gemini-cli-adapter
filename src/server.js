@@ -126,7 +126,7 @@ const server = http.createServer(async (req, res) => {
             // フォーマット: /path/to/file (mime/type) | url
             // もしくは:     /path/to/file | url
             // もしくは:     /path/to/file
-            const pathPart = content.split(/\s*[\|(]\s*/)[0].trim();
+            const pathPart = content.split(/\s*[|(]\s*/)[0].trim();
             if (pathPart && pathPart.startsWith('/')) {
                 mediaPaths.push(pathPart);
             }
@@ -180,13 +180,30 @@ const server = http.createServer(async (req, res) => {
                 'Connection': 'keep-alive',
             });
 
-            runGeminiStreaming({
+            let abortHandle = null;
+
+            // HTTP 切断検知 (Node.js)
+            // ストリーミング中にクライアントが切断した場合（例: /stop）、
+            // サーバー側がまだ書き込みを終了していなければ強制終了する。
+            res.on('close', () => {
+                // writableEnded が false であれば、正常終了(res.end呼び出し)ではなく異常切断
+                if (!res.writableEnded) {
+                    log('[server] Client disconnected unexpectedly during streaming.');
+                    if (abortHandle) {
+                        abortHandle.kill();
+                    }
+                }
+                try { fs.rmSync(tempSystemMdPath); } catch (_) {}
+            });
+
+            abortHandle = await runGeminiStreaming({
                 prompt: promptText,
                 messages: historyMessages.concat(messages.slice(lastUserIdx)),
                 model: reqModel,
                 sessionName: geminiSessionId,
                 mediaPaths,
                 env,
+                req,
                 res,
                 requestId,
                 onSessionId: (capturedId) => {
@@ -196,10 +213,6 @@ const server = http.createServer(async (req, res) => {
                     log(`captured session_id: ${capturedId} for key: ${sessionKey}`);
                 },
                 sessionKey,
-            });
-
-            res.on('close', () => {
-                try { fs.rmSync(tempSystemMdPath); } catch (_) {}
             });
         } else {
             // Non-streaming: collect all output then respond
@@ -233,6 +246,7 @@ const server = http.createServer(async (req, res) => {
                 sessionName: geminiSessionId,
                 mediaPaths,
                 env,
+                req,
                 res: fakeRes,
                 requestId,
                 onSessionId: (capturedId) => {
