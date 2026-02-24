@@ -2,7 +2,7 @@
   "name": "openclaw-gemini-cli-adapter",
   "version": "1.0.0",
   "description": "OpenClaw Gateway for Gemini CLI - A powerful bridge that turns Gemini CLI into an autonomous agent.",
-  "main": "adapter.js",
+  "main": "src/server.js",
   "scripts": {
     "setup": "node setup.js",
     "test": "echo \"Error: no test specified\" && exit 1"

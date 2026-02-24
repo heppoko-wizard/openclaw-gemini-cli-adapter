@@ -15,8 +15,8 @@ const os = require("os");
 const readline = require("readline");
 
 const SCRIPT_DIR = __dirname;
-let OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, "..");
-const ADAPTER_JS = path.join(SCRIPT_DIR, "adapter.js");
+const OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, "..");
+const SERVER_JS = path.join(SCRIPT_DIR, "src", "server.js");
 const OPENCLAW_CONFIG = path.join(os.homedir(), ".openclaw", "openclaw.json");
 const GEMINI_CREDS_DIR = path.join(os.homedir(), ".gemini");
 
@@ -258,24 +258,15 @@ async function main() {
 
     if (!config.agents) config.agents = {};
     if (!config.agents.defaults) config.agents.defaults = {};
-    if (!config.agents.defaults.cliBackends) config.agents.defaults.cliBackends = {};
+    if (!config.providers) config.providers = {};
 
-    // Dynamic path handling: Portable, robust absolute path calculation
-    config.agents.defaults.cliBackends["gemini-adapter"] = {
-        command: "node",
-        input: "stdin",
-        output: "text", // essential: ensures OpenClaw parses text out correctly
-        systemPromptArg: "--system",
-        args: [
-            ADAPTER_JS,
-            "--session-id", "{sessionId}",
-            "--allowed-skills", "{allowedSkillsPaths}"
-        ],
-        resumeArgs: [
-            ADAPTER_JS,
-            "--session-id", "{sessionId}",
-            "--allowed-skills", "{allowedSkillsPaths}"
-        ]
+    // Register as an OpenAI-compatible provider
+    config.agents.defaults.provider = "gemini-adapter";
+    config.providers["gemini-adapter"] = {
+        type: "openai",
+        baseUrl: "http://localhost:3972",
+        apiKey: "none",
+        model: "auto-gemini-3"
     };
 
     try {
@@ -318,11 +309,8 @@ async function main() {
     // Write out how to use it
     console.log("");
     console.log(L.configTip);
-    console.log('  "agents": {');
-    console.log('    "defaults": {');
-    console.log('      "provider": "gemini-adapter"');
-    console.log('    }');
-    console.log('  }');
+    console.log('  "agents": { "defaults": { "provider": "gemini-adapter" } },');
+    console.log('  "providers": { "gemini-adapter": { "type": "openai", "baseUrl": "http://localhost:3972", ... } }');
     console.log("");
     console.log(L.tryIt);
     console.log("=================================================");
