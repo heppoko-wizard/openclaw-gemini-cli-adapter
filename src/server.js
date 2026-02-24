@@ -113,14 +113,23 @@ const server = http.createServer(async (req, res) => {
         const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
         const lastUserText = lastUserMsg ? extractText(lastUserMsg.content) : '';
 
+        // [media attached: /path/to/file (mime/type) | url] フォーマットから全メディアパスを抽出
+        // Gemini CLIはファイル拡張子を自動判別するため、画像以外（音声・動画・PDF等）も拾う
         const mediaPaths = [];
         const mediaAttachedPattern = /\[media attached(?:\s+\d+\/\d+)?:\s*([^\]]+)\]/gi;
         let mMatch;
         while ((mMatch = mediaAttachedPattern.exec(lastUserText)) !== null) {
-            const content = mMatch[1];
-            if (/^\d+\s+files?$/i.test(content.trim())) continue;
-            const pathMatch = content.match(/^\s*(.+?\.(?:png|jpe?g|gif|webp|bmp|tiff?|heic|heif))\s*(?:\(|$|\|)/i);
-            if (pathMatch && pathMatch[1]) mediaPaths.push(pathMatch[1].trim());
+            const content = mMatch[1].trim();
+            // "3 files" のようなサマリーはスキップ
+            if (/^\d+\s+files?$/i.test(content)) continue;
+            // パスを抽出: "| url" や "(mime)" より前の部分が絶対パス
+            // フォーマット: /path/to/file (mime/type) | url
+            // もしくは:     /path/to/file | url
+            // もしくは:     /path/to/file
+            const pathPart = content.split(/\s*[\|(]\s*/)[0].trim();
+            if (pathPart && pathPart.startsWith('/')) {
+                mediaPaths.push(pathPart);
+            }
         }
 
         // Separate history from the prompt

@@ -35,10 +35,9 @@ async function main() {
         console.log("[Runner] Ready. Waiting for IPC message...");
     }
 
-    // 5. プロンプトの受信と実行
     process.on('message', async (message) => {
         if (message.type === 'run') {
-            const { input, prompt_id, resumedSessionData, model } = message;
+            const { input, prompt_id, resumedSessionData, model, mediaPaths } = message;
             
             try {
                 if (resumedSessionData && resumedSessionData.conversation) {
@@ -53,11 +52,34 @@ async function main() {
                     console.log(`[Runner] Using model: ${model}`);
                 }
 
+                // メディアパスを @path 形式で入力に付加し、同時にアクセス許可のためにWorkspaceContextに追加する
+                // Gemini CLI は @/path/to/file 構文でローカルファイルを読み込むが、TargetDir外のファイルは弾くため
+                let finalInput = input;
+                if (Array.isArray(mediaPaths) && mediaPaths.length > 0) {
+                    const atPaths = [];
+                    for (const p of mediaPaths) {
+                        if (typeof p === 'string' && p.startsWith('/')) {
+                            // Gemini CLIのセキュリティ制約（Workspace外ファイル読み取り禁止）を回避するため、
+                            // パスを ReadOnlyPath として登録する
+                            try {
+                                config.getWorkspaceContext().addReadOnlyPath(p);
+                            } catch (e) {
+                                console.warn(`[Runner] Failed to add read-only path for ${p}:`, e);
+                            }
+                            atPaths.push(`@${p}`);
+                        }
+                    }
+                    if (atPaths.length > 0) {
+                        console.log(`[Runner] Injecting ${atPaths.length} media path(s): ${atPaths.join(', ')}`);
+                        finalInput = atPaths.join(' ') + '\n' + (input || '');
+                    }
+                }
+
                 // gemini.js のメインループを呼び出す
                 await runNonInteractive({
                     config,
                     settings,
-                    input,
+                    input: finalInput,
                     prompt_id: prompt_id || Math.random().toString(16).slice(2),
                     resumedSessionData,
                 });

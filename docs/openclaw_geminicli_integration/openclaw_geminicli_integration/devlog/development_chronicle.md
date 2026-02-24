@@ -198,6 +198,32 @@
 - `scripts/update_models.js` — `openclaw.json` のみを更新するよう刷新（`models.json` 直接書き込みを廃止）
 - `src/server.js` — `Selected model:` ログ追加・リクエストキャッシュ保存先を `logs/` に変更
 - `src/runner.js` — `[Runner] Using model:` ログ追加
+
+---
+
+## セッション 11: 全メディアモダリティ対応（マルチモーダル入力の拡張）
+
+### やったこと
+- **OpenClaw 本体の入力モダリティ制限を調査**: `types.models.ts` の `ModelDefinitionSchema` を確認し、`input` フィールドが `text | image` に厳格に制限されていることを特定。`audio` や `video` を `openclaw.json` に追記するとGatewayのバリデーションエラーで起動しないことを確認。
+- **隠れたマルチメディアパス伝達の仕組みを発見**: `src/auto-reply/media-note.ts` が全添付ファイル（音声・動画含む）を `[media attached: /path/to/file (mime) | url]` 形式でプロンプトテキストに挿入することを確認。この仕組みを利用すれば `openclaw.json` の `input` は変更不要。
+- **`src/server.js` の正規表現拡張**: 従来は画像拡張子（PNG, JPG等）のみを抽出していた正規表現を、「絶対パス（`/` で始まる文字列）をすべて収集する」シンプルな設計に変更。拡張子によるフィルタリングはGemini CLI側の `detectFileType()` に任せる。
+- **`src/runner.js` の `@path` 注入**: IPC メッセージで受け取った `mediaPaths` を `@/path/to/file` 形式でプロンプト入力の先頭に付加するロジックを追加。Gemini CLI の `@path` 構文はローカルファイルを自動的にマルチモーダル解析する。
+- **Adapterを再起動**: 変更を反映し、ポート3972でLISTEN状態であることを確認。
+
+### 発見・学んだこと
+- **OpenClaw の制限回避策**: `ModelDefinitionSchema` の `input: Array<"text" | "image">` は Zodスキーマで厳格に型制限されているが、実際の添付ファイルはテキスト内に `[media attached: ...]` 形式でパスが埋め込まれて流れてくる。**スキーマを変えなくても全メディアを通せる**。
+- **Gemini CLI の `@path` 構文**: `@/path/to/file` をプロンプトに含めるだけで、Gemini CLI が内部の `detectFileType()` → `processSingleFileContent()` → `inlineData` 変換を自動で行う。PNG/MP3/MP4/PDF すべてこの一本のパイプで処理される。
+- **`mime` パッケージの動的解決**: `fileUtils.js` の `getSpecificMimeType()` は `mime/lite` パッケージを直接利用。拡張子のハードコードなしに動的にMIMEを判定する。
+
+### ハマったこと・失敗
+- **現象**: ログ上で `@/home/heppo/.openclaw/media/inbound/...jpg` のようにメディアパスがGemini CLIに渡されているにも関わらず、LLMが画像を認識できずハルシネーションを起こす（全く違う内容をテキストから推測して答える）。
+- **原因の深掘り**: Gemini CLIの `ReadManyFilesTool` 自体は画像も読み込めるが、**「Gemini CLIの現在のワークスペース（対象ディレクトリ）外のパスは、セキュリティ保護のため読み取りを拒否（またはスキップ）する」** システムになっていることが判明。OpenClawのメディア保存先 `~/.openclaw/media/` がワークスペース外であったため弾かれていた。
+- **対処**: `runner.js` にて、受け取った `mediaPaths` を順次 `config.getWorkspaceContext().addReadOnlyPath(p)` で動的にホワイトリスト（ReadOnlyPath）に追加してから `@path` 構文に組み立てるように修正。これにより、Gemini CLIの内部パーサーが「安全なパス」としてファイルの中身（画像・音声等）を正しくインラインデータ化（base64化）するようになり解決した。
+
+### 変更したファイル
+- `src/server.js` — `[media attached]` からのパス抽出を全絶対パス対応に拡張（拡張子フィルタ削除）
+- `src/runner.js` — `mediaPaths` を `@path` 形式で入力先頭に注入するロジック追加。および WorkspaceContext に `addReadOnlyPath` を発行してセキュリティ制約を回避する仕組みを実装
+
 - `start.sh` — `LOG_FILE` / `PID_FILE` を `logs/` 配下に変更、`logs/` ディレクトリ自動作成を追加
 - `docs/gemini_model_sync/resource_paths.md` — 新規作成（ログ・設定パス一覧）
 - `docs/gemini_model_sync/walkthrough.md` — 新規作成（実装概要）
