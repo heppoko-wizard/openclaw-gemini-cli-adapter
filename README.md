@@ -113,6 +113,17 @@ Major planned updates include:
 *   **Windows Support (Creation of `start.bat`):**
    Currently, only a Unix `start.sh` is provided. Full portability for Windows environments is planned.
 
+## Tested With
+
+> This adapter is actively tested with the following versions on Linux (x86_64).
+
+| Component | Version |
+|---|---|
+| **OpenClaw** | v2026.2.23 |
+| **Gemini CLI** | v0.29.7 |
+| **Node.js** | v24.13.0 |
+| **OS** | Linux (x86_64) |
+
 ## Disclaimer
 
 This software is an unofficial community-made adapter and is not affiliated with, endorsed, or supported by Google. Use of the Gemini CLI and associated Google accounts is at your own risk. The authors are not responsible for any account suspensions, data loss, or other damages resulting from the use of this software. It is provided "as is" without any warranty.
