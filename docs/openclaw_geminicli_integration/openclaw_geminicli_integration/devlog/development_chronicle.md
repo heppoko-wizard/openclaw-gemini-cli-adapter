@@ -178,6 +178,7 @@
 ## セッション 10: Gemini モデル動的同期・UI表示問題の解決・ログ集約
 
 ### やったこと
+- **動的モデル選択機能の基盤実装 (commit 7df6df02)**: OpenClaw本体からのリクエスト (`req.body.model`) をパースし、指定されたモデル（例: `gemini-2.5-flash`）をそのままGemini CLIの推論エンジン（RunnerPool/geminiClient）に渡して実行できるように `src/server.js` と `src/runner.js` を拡張。これまでハードコードされていた単一モデル制約を撤廃。
 - **UIに全Geminiモデルが表示されない原因を特定**: `openclaw models list` が `models.json` ではなく `openclaw.json` の `agents.defaults.models` マップを参照することを突き止めた。
 - **`scripts/update_models.js` の改修**: `@google/gemini-cli-core` の `VALID_GEMINI_MODELS` から取得したモデルを `openclaw.json` の2箇所（`models.providers.gemini-adapter.models` と `agents.defaults.models`）に書き込むよう修正。これで OpenClaw が Gateway 起動時に `models.json` を自動生成するため、`models.json` への直接書き込みを廃止してシンプルにした。
 - **ログ出力の追加**: `server.js` と `runner.js` に「どのモデルが選ばれたか」を `adapter.log` に出力する処理を追加（`Selected model:`, `[Runner] Using model:`）。
