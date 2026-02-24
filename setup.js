@@ -27,8 +27,8 @@ const MSG = {
         welcome: "OpenClaw Gemini Backend セットアップへようこそ！",
         checkOpenclaw: "OpenClaw 本体のインストール状態をチェックしています...",
         notFoundOpenclaw: "OpenClaw 本体が見つかりません。",
-        suggestClone: "自動的にダウンロード (git clone) しますか？ (Y/n): ",
-        cloning: "OpenClaw をクローン中...",
+        suggestClone: "最新安定版の OpenClaw をダウンロードしますか？ (Y/n): ",
+        cloning: "OpenClaw の最新リリースを確認中...",
         cloneFail: "エラー: OpenClaw のダウンロードに失敗しました。",
         cloneSuccess: "✓ OpenClaw のダウンロード完了",
         setupAborted: "セットアップを中断しました。",
@@ -60,8 +60,8 @@ const MSG = {
         welcome: "Welcome to OpenClaw Gemini Backend Setup!",
         checkOpenclaw: "Checking OpenClaw base installation...",
         notFoundOpenclaw: "OpenClaw repository not found in parent directory.",
-        suggestClone: "Download OpenClaw automatically? (Y/n): ",
-        cloning: "Cloning OpenClaw...",
+        suggestClone: "Download the latest stable release of OpenClaw? (Y/n): ",
+        cloning: "Checking OpenClaw latest release...",
         cloneFail: "Error: Failed to download OpenClaw.",
         cloneSuccess: "✓ OpenClaw downloaded.",
         setupAborted: "Setup aborted.",
@@ -93,8 +93,8 @@ const MSG = {
         welcome: "欢迎使用 OpenClaw Gemini 后端安装程序！",
         checkOpenclaw: "正在检查 OpenClaw 本体的安装状态...",
         notFoundOpenclaw: "未发现 OpenClaw 本体。",
-        suggestClone: "是否自动下载 (git clone)？ (Y/n): ",
-        cloning: "正在克隆 OpenClaw...",
+        suggestClone: "是否下载最新稳定版的 OpenClaw？ (Y/n): ",
+        cloning: "正在查询 OpenClaw 最新发布版本...",
         cloneFail: "错误：下载 OpenClaw 失败。",
         cloneSuccess: "✓ OpenClaw 下载完成",
         setupAborted: "安装已中止。",
@@ -209,14 +209,72 @@ async function main() {
         const dlAns = await question(L.suggestClone);
         if (dlAns.trim() === '' || dlAns.trim().toLowerCase() === 'y') {
             console.log(L.cloning);
-            // Clone into parent directory's 'openclaw' folder if parent is not openclaw itself
-            const runClone = runCommand("git clone https://github.com/openclaw/openclaw.git openclaw-core", SCRIPT_DIR);
-            if (runClone.status !== 0) {
-                console.error("[!] " + L.cloneFail);
-                process.exit(1);
+
+            // Try to fetch the latest stable release from GitHub API
+            let downloadUrl = null;
+            let releaseTag = null;
+            try {
+                const https = require('https');
+                const releaseInfo = await new Promise((resolve, reject) => {
+                    https.get({
+                        hostname: 'api.github.com',
+                        path: '/repos/openclaw/openclaw/releases/latest',
+                        headers: { 'User-Agent': 'openclaw-gemini-cli-adapter-setup' }
+                    }, (res) => {
+                        let body = '';
+                        res.on('data', chunk => { body += chunk; });
+                        res.on('end', () => { try { resolve(JSON.parse(body)); } catch(e) { reject(e); } });
+                    }).on('error', reject);
+                });
+                releaseTag = releaseInfo.tag_name;
+                const zipAsset = (releaseInfo.assets || []).find(a => a.name.endsWith('.zip') && !a.name.includes('dSYM'));
+                if (zipAsset) downloadUrl = zipAsset.browser_download_url;
+            } catch (e) {
+                console.log('[setup] Could not fetch release info, will fall back to git clone.');
             }
-            // Update OPENCLAW_ROOT to the newly cloned directory
-            OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, "openclaw-core");
+
+            let destDir = 'openclaw-core';
+            if (downloadUrl && releaseTag) {
+                console.log(`  Found stable release: ${releaseTag}`);
+                console.log(`  Downloading: ${downloadUrl}`);
+                const zipPath = path.join(SCRIPT_DIR, 'openclaw-release.zip');
+
+                // Download the ZIP
+                const dlRes = runCommand(`curl -L -o "${zipPath}" "${downloadUrl}"`, SCRIPT_DIR);
+                if (dlRes.status !== 0) {
+                    console.error('[!] Download failed, falling back to git clone...');
+                    downloadUrl = null; // fall through to git clone
+                } else {
+                    // Unzip
+                    const unzipRes = runCommand(`unzip -q "${zipPath}" -d "${destDir}"`, SCRIPT_DIR);
+                    try { fs.rmSync(zipPath); } catch(_) {}
+                    if (unzipRes.status !== 0) {
+                        console.error('[!] Unzip failed, falling back to git clone...');
+                        downloadUrl = null;
+                    } else {
+                        // If the zip extracted into a nested folder, move it up
+                        const entries = fs.readdirSync(path.join(SCRIPT_DIR, destDir));
+                        if (entries.length === 1 && fs.statSync(path.join(SCRIPT_DIR, destDir, entries[0])).isDirectory()) {
+                            const inner = path.join(SCRIPT_DIR, destDir, entries[0]);
+                            const tmp = path.join(SCRIPT_DIR, destDir + '-tmp');
+                            fs.renameSync(inner, tmp);
+                            fs.rmdirSync(path.join(SCRIPT_DIR, destDir));
+                            fs.renameSync(tmp, path.join(SCRIPT_DIR, destDir));
+                        }
+                    }
+                }
+            }
+
+            if (!downloadUrl) {
+                // Fallback to git clone
+                const runClone = runCommand(`git clone https://github.com/openclaw/openclaw.git "${destDir}"`, SCRIPT_DIR);
+                if (runClone.status !== 0) {
+                    console.error("[!] " + L.cloneFail);
+                    process.exit(1);
+                }
+            }
+
+            OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, destDir);
             isOpenclawPresent = true;
             console.log(L.cloneSuccess + "\n");
         } else {
