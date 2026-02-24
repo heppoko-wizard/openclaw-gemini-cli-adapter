@@ -15,10 +15,11 @@ const os = require("os");
 const readline = require("readline");
 
 const SCRIPT_DIR = __dirname;
-let OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, "..");
-const SERVER_JS = path.join(SCRIPT_DIR, "src", "server.js");
+const OPENCLAW_ROOT = SCRIPT_DIR;
+const PLUGIN_DIR = path.join(OPENCLAW_ROOT, "gemini-cli-claw");
+const SERVER_JS = path.join(PLUGIN_DIR, "src", "server.js");
 const OPENCLAW_CONFIG = path.join(os.homedir(), ".openclaw", "openclaw.json");
-const GEMINI_CREDS_DIR = path.join(os.homedir(), ".gemini");
+const GEMINI_CREDS_DIR = path.join(PLUGIN_DIR, "src", ".gemini");
 
 // Messages vocabulary
 const MSG = {
@@ -169,21 +170,30 @@ function buildOpenclaw(cwd) {
 
 async function main() {
     // 0. Language selection (Detection & Choice)
+    const envSetupLang = process.env.SETUP_LANG;
     const envLang = (process.env.LANG || "").toLowerCase();
-    if (envLang.startsWith("ja")) {
-        L = MSG.ja;
-    } else if (envLang.startsWith("zh")) {
-        L = MSG.zh;
-    }
+    
+    if (envSetupLang) {
+        if (envSetupLang === 'ja') L = MSG.ja;
+        else if (envSetupLang === 'zh') L = MSG.zh;
+        else L = MSG.en;
+        console.log(`Language set to: ${envSetupLang === 'ja' ? '日本語' : (envSetupLang === 'zh' ? '简体中文' : 'English')}`);
+    } else {
+        if (envLang.startsWith("ja")) {
+            L = MSG.ja;
+        } else if (envLang.startsWith("zh")) {
+            L = MSG.zh;
+        }
 
-    console.log("=================================================");
-    const langInput = await question(L.selectLang);
-    if (langInput.trim() === '2') {
-        L = MSG.ja;
-    } else if (langInput.trim() === '3') {
-        L = MSG.zh;
-    } else if (langInput.trim() === '1') {
-        L = MSG.en;
+        console.log("=================================================");
+        const langInput = await question(L.selectLang);
+        if (langInput.trim() === '2') {
+            L = MSG.ja;
+        } else if (langInput.trim() === '3') {
+            L = MSG.zh;
+        } else if (langInput.trim() === '1') {
+            L = MSG.en;
+        }
     }
 
     console.log("\n" + L.welcome);
@@ -209,11 +219,9 @@ async function main() {
 
     if (!isOpenclawPresent) {
         console.log("[!] " + L.notFoundOpenclaw);
-        const dlAns = await question(L.suggestClone);
-        if (dlAns.trim() === '' || dlAns.trim().toLowerCase() === 'y') {
-            console.log(L.cloning);
+        console.log(L.cloning);
 
-            // Try to fetch the latest stable release from GitHub API
+        // Try to fetch the latest stable release from GitHub API
             let downloadUrl = null;
             let releaseTag = null;
             try {
@@ -230,13 +238,13 @@ async function main() {
                     }).on('error', reject);
                 });
                 releaseTag = releaseInfo.tag_name;
-                const zipAsset = (releaseInfo.assets || []).find(a => a.name.endsWith('.zip') && !a.name.includes('dSYM'));
-                if (zipAsset) downloadUrl = zipAsset.browser_download_url;
+                if (releaseInfo.zipball_url) {
+                    downloadUrl = releaseInfo.zipball_url;
+                }
             } catch (e) {
                 console.log('[setup] Could not fetch release info, will fall back to git clone.');
             }
 
-            let destDir = 'openclaw-core';
             if (downloadUrl && releaseTag) {
                 console.log(`  Found stable release: ${releaseTag}`);
                 console.log(`  Downloading: ${downloadUrl}`);
@@ -249,49 +257,44 @@ async function main() {
                     downloadUrl = null; // fall through to git clone
                 } else {
                     // Unzip
-                    const unzipRes = runCommand(`unzip -q "${zipPath}" -d "${destDir}"`, SCRIPT_DIR);
+                    const tmpExtractDir = path.join(SCRIPT_DIR, 'openclaw-tmp-extract');
+                    fs.mkdirSync(tmpExtractDir, { recursive: true });
+                    const unzipRes = runCommand(`unzip -q "${zipPath}" -d "${tmpExtractDir}"`, SCRIPT_DIR);
                     try { fs.rmSync(zipPath); } catch(_) {}
+                    
                     if (unzipRes.status !== 0) {
                         console.error('[!] Unzip failed, falling back to git clone...');
                         downloadUrl = null;
+                        try { fs.rmSync(tmpExtractDir, { recursive: true, force: true }); } catch(_) {}
                     } else {
-                        // If the zip extracted into a nested folder, move it up
-                        const entries = fs.readdirSync(path.join(SCRIPT_DIR, destDir));
-                        if (entries.length === 1 && fs.statSync(path.join(SCRIPT_DIR, destDir, entries[0])).isDirectory()) {
-                            const inner = path.join(SCRIPT_DIR, destDir, entries[0]);
-                            const tmp = path.join(SCRIPT_DIR, destDir + '-tmp');
-                            fs.renameSync(inner, tmp);
-                            fs.rmdirSync(path.join(SCRIPT_DIR, destDir));
-                            fs.renameSync(tmp, path.join(SCRIPT_DIR, destDir));
+                        // GitHub's zipball creates a folder like 'openclaw-openclaw-xxxxxxx'
+                        const entries = fs.readdirSync(tmpExtractDir);
+                        if (entries.length === 1) {
+                            const innerDir = path.join(tmpExtractDir, entries[0]);
+                            fs.cpSync(innerDir, SCRIPT_DIR, { recursive: true });
+                        } else {
+                            fs.cpSync(tmpExtractDir, SCRIPT_DIR, { recursive: true });
                         }
+                        fs.rmSync(tmpExtractDir, { recursive: true, force: true });
                     }
                 }
             }
 
             if (!downloadUrl) {
                 // Fallback to git clone
-                const runClone = runCommand(`git clone https://github.com/openclaw/openclaw.git "${destDir}"`, SCRIPT_DIR);
+                const tmpCloneDir = path.join(SCRIPT_DIR, 'openclaw-tmp-clone');
+                const runClone = runCommand(`git clone https://github.com/openclaw/openclaw.git "${tmpCloneDir}"`, SCRIPT_DIR);
                 if (runClone.status !== 0) {
                     console.error("[!] " + L.cloneFail);
+                    try { fs.rmSync(tmpCloneDir, { recursive: true, force: true }); } catch(_) {}
                     process.exit(1);
                 }
+                fs.cpSync(tmpCloneDir, SCRIPT_DIR, { recursive: true });
+                fs.rmSync(tmpCloneDir, { recursive: true, force: true });
             }
 
-            OPENCLAW_ROOT = path.resolve(SCRIPT_DIR, destDir);
             isOpenclawPresent = true;
             console.log(L.cloneSuccess + "\n");
-        } else {
-            const folderName = path.basename(SCRIPT_DIR);
-            console.error("\n[!] " + L.setupAborted);
-            console.error(L.relocationTip.replace("{RENAME_ME}", folderName));
-            console.error(L.placementEx);
-            console.error("  openclaw/");
-            console.error("  ├── src/");
-            console.error("  ├── package.json");
-            console.error(`  └── ${folderName}/   <-- ${L.ja ? "ここ" : (L.zh ? "这里" : "here")}`);
-            console.error("      └── setup.js\n");
-            process.exit(1);
-        }
     }
 
     // build target validation (dist/index.js shouldn't be missing if properly built)
@@ -300,23 +303,20 @@ async function main() {
     }
 
     if (openclawNeedsBuild) {
-        const buildAns = await question(L.installOpenclaw);
-        if (buildAns.trim() === '' || buildAns.trim().toLowerCase() === 'y') {
-            console.log(L.buildingOpenclaw);
-            const res = buildOpenclaw(OPENCLAW_ROOT);
-            if (res.status !== 0) {
-                console.error("Error: OpenClaw build failed. Setup cannot continue.");
-                process.exit(1);
-            }
-            console.log(L.buildOpenclawSuccess + "\n");
+        console.log(L.buildingOpenclaw);
+        const res = buildOpenclaw(OPENCLAW_ROOT);
+        if (res.status !== 0) {
+            console.error("Error: OpenClaw build failed. Setup cannot continue.");
+            process.exit(1);
         }
+        console.log(L.buildOpenclawSuccess + "\n");
     } else {
         console.log(L.buildOpenclawSuccess + " (Skipped / 読込済)\n");
     }
 
     // 2. Install Gemini Backend dependencies
     console.log("[2/4] " + L.checkGeminiDep);
-    const depRes = runCommand("npm install", SCRIPT_DIR);
+    const depRes = runCommand("npm install", PLUGIN_DIR);
     if (depRes.status !== 0) {
         console.error("[!] " + L.npmFail);
         process.exit(1);
@@ -325,7 +325,7 @@ async function main() {
 
     // 2.5 Sync Gemini Models to OpenClaw
     console.log("[~] " + L.syncModels);
-    const syncRes = runCommand("node scripts/update_models.js", SCRIPT_DIR);
+    const syncRes = runCommand("node scripts/update_models.js", PLUGIN_DIR);
     if (syncRes.status !== 0) {
         console.error("(!) " + L.syncFail);
     }
@@ -345,18 +345,8 @@ async function main() {
         fs.mkdirSync(path.dirname(OPENCLAW_CONFIG), { recursive: true });
     }
 
-    if (!config.agents) config.agents = {};
-    if (!config.agents.defaults) config.agents.defaults = {};
-    if (!config.providers) config.providers = {};
-
-    // Register as an OpenAI-compatible provider
-    config.agents.defaults.provider = "gemini-adapter";
-    config.providers["gemini-adapter"] = {
-        type: "openai",
-        baseUrl: "http://localhost:3972",
-        apiKey: "none",
-        model: "auto-gemini-3"
-    };
+    if (!config.models) config.models = {};
+    config.models.primary = "gemini-adapter/auto-gemini-3";
 
     try {
         fs.writeFileSync(OPENCLAW_CONFIG, JSON.stringify(config, null, 2), "utf-8");
@@ -371,22 +361,19 @@ async function main() {
     const credsPath2 = path.join(GEMINI_CREDS_DIR, "google_accounts.json");
     
     if (!fs.existsSync(credsPath1) && !fs.existsSync(credsPath2)) {
-        const authAns = await question(L.authNeeded);
-        if (authAns.trim() === '' || authAns.trim().toLowerCase() === 'y') {
-            console.log(L.authStart);
-            
-            // Prefer the locally installed gemini CLI in gemini-cli-claw, fallback to npx
-            const localGeminiPath = path.join(SCRIPT_DIR, "node_modules", ".bin", "gemini");
-            const commandToRun = fs.existsSync(localGeminiPath) ? localGeminiPath : "npx gemini";
-            
-            // Use --no-browser to avoid terminal hanging issues in headless/SSH setups
-            runCommand(commandToRun + " login --no-browser", SCRIPT_DIR);
-            
-            if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2)) {
-                console.log(L.authSuccess + "\n");
-            } else {
-                console.log(L.authMissingTip + "\n");
-            }
+        console.log(L.authStart);
+        
+        // Prefer the locally installed gemini CLI in gemini-cli-claw, fallback to npx
+        const localGeminiPath = path.join(PLUGIN_DIR, "node_modules", ".bin", "gemini");
+        const commandToRun = fs.existsSync(localGeminiPath) ? localGeminiPath : "npx gemini";
+        
+        // Use --no-browser to avoid terminal hanging issues in headless/SSH setups
+        runCommand(`GEMINI_CLI_HOME="${GEMINI_CREDS_DIR}" ` + commandToRun + " login --no-browser", PLUGIN_DIR);
+        
+        if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2)) {
+            console.log(L.authSuccess + "\n");
+        } else {
+            console.log(L.authMissingTip + "\n");
         }
     } else {
         console.log(L.authSuccess + " (Skipped / 読込済)\n");
@@ -398,8 +385,9 @@ async function main() {
     // Write out how to use it
     console.log("");
     console.log(L.configTip);
-    console.log('  "agents": { "defaults": { "provider": "gemini-adapter" } },');
-    console.log('  "providers": { "gemini-adapter": { "type": "openai", "baseUrl": "http://localhost:3972", ... } }');
+    console.log('  "models": {');
+    console.log('    "primary": "gemini-adapter/auto-gemini-3"');
+    console.log('  }');
     console.log("");
     console.log(L.tryIt);
     console.log("");

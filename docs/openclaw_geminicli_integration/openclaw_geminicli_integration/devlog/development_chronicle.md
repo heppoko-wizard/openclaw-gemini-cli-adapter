@@ -332,3 +332,32 @@
 - `README.md` — 機能・ロードマップ・アーキテクチャ説明の最新化
 - `KNOWN_ISSUES.md` — （削除）内容を解決済みとして整理後、残課題を backlog へ移行
 - `docs/openclaw_geminicli_integration/openclaw_geminicli_integration/backlog.md` — MCP途上通知未対応を制限事項として追記
+
+---
+
+## セッション 17: セットアップ自動化の完成と隔離環境への完全移行 (2026-02-25)
+
+### やったこと
+- **`setup.js` の自爆バグ修正と高機能化**: 
+  - OpenClaw 本体をダウンロード・展開する際に、カレントディレクトリ（アダプター側）を直接上書きして破壊していた致命的なバグ（`fs.cpSync` のパス解決ミス）を修正し、リポジトリ復旧。
+  - `gemini login` の実行を `npx @google/gemini-cli login --no-browser` 経由に統一し、認証失敗を検知して停止するエラーハンドリングを追加。
+  - OpenClaw 本体の `openclaw.json` を壊していた無効なキー（`provider`, `providers`）の書き込みを削除し、正しいモデル設定形式（`models.primary`）へ修正。
+- **隔離環境 `gemini-home` への完全な再統合**:
+  - `git checkout` による古いパスへの先祖返りが発生していた `runner-pool.js`, `session.js`, `streaming.js`, `start.sh` を全て修正。
+  - 作業ディレクトリ内の `./gemini-home/` を唯一の正解（認証・設定・セッションキャッシュの保存先）とし、グローバルの `~/.gemini` や `~/.openclaw` を一切汚染しないポータブル構成を確立。
+- **Git 管理の適正化**:
+  - `.gitignore` を更新し、隔離環境 (`gemini-home/`), 旧パス（`src/.gemini/`）, ログファイルを追跡対象から除外。
+
+### 発見・学んだこと
+- **セットアップスクリプトのリスク**: ZIP展開やディレクトリコピーを自動化する際、展開先の相対パスを誤るとリポジトリ自体の `package.json` やコードが消滅する。スクリプト実行前の「場所の検証」の重要性を痛感した。
+- **ポータブル化の難所**: ホームディレクトリをバイパス（隔離）する場合、`RunnerPool`（待機プロセス）, `Server`（リクエスト受付）, `Runner`（実行）の全レイヤーでパス認識を完全に一致させないと、ツール（MCP）の読み込みエラーや資格情報の紛失（ハルシネーション実行への後退）を招く。
+
+### 変更したファイル
+- `setup.js` — パス解決・認証トリガー・設定書き込みロジックの修正
+- `src/runner-pool.js` — `gemini-home` 基準の隔離環境準備ロジックへ移行
+- `src/session.js` — セッションマップの保存先を `gemini-home` へ変更
+- `src/streaming.js` — 各セッションの隔離パスを `gemini-home` 配下に変更
+- `start.sh` — 初期起動時の環境変数を `gemini-home` に修正
+- `.gitignore` — 隔離環境ディレクトリの追跡除外
+
+---

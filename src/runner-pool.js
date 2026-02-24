@@ -31,26 +31,26 @@ function resolveOpenClawWorkspace() {
 
 /**
  * Gemini CLI が OpenClaw MCP ツールを認識できるよう、
- * 共有の GEMINI_CLI_HOME ディレクトリを準備する。
+ * プラグイン専用の独立した GEMINI_CLI_HOME ディレクトリを準備する。
  *
- * - ~/.gemini/settings.json をベースに openclaw-tools MCP サーバーを注入
- * - 認証ファイル (oauth_creds.json 等) をコピー
- *
- * これを spawn 時の環境変数 GEMINI_CLI_HOME に指定することで、
- * Runner が正しい settings.json を読み込む。
+ * - プロジェクトルートの gemini-home/.gemini/settings.json を直接利用・更新する
+ * - ユーザーのグローバルな ~/.gemini は一切汚染しない
+ * - 資格情報が存在しない場合は、グローバルからのコピーではなくエラーログを出す（setup.js での認証を促す）
  */
-function prepareSharedGeminiHome(workspaceCwd) {
-    const sharedHomeDir = path.join(os.homedir(), '.openclaw', 'gemini-shared-home');
-    const sharedGeminiDir = path.join(sharedHomeDir, '.gemini');
-    fs.mkdirSync(sharedGeminiDir, { recursive: true });
+function prepareIsolatedGeminiHome(workspaceCwd) {
+    const isolatedHomeDir = path.join(__dir, 'gemini-home');
+    const isolatedGeminiDir = path.join(isolatedHomeDir, '.gemini');
+    
+    if (!fs.existsSync(isolatedGeminiDir)) {
+        fs.mkdirSync(isolatedGeminiDir, { recursive: true });
+    }
 
-    // 1. ユーザーの settings.json を読み込み、openclaw-tools MCP を注入
-    const realGeminiDir = path.join(os.homedir(), '.gemini');
-    const realSettingsPath = path.join(realGeminiDir, 'settings.json');
-    let userSettings = {};
+    // 1. 隔離環境の settings.json を読み込み、openclaw-tools MCP を注入
+    const settingsPath = path.join(isolatedGeminiDir, 'settings.json');
+    let userSettings = { mcpServers: {} };
     try {
-        if (fs.existsSync(realSettingsPath)) {
-            userSettings = JSON.parse(fs.readFileSync(realSettingsPath, 'utf-8'));
+        if (fs.existsSync(settingsPath)) {
+            userSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
         }
     } catch (_) {}
 
@@ -62,21 +62,22 @@ function prepareSharedGeminiHome(workspaceCwd) {
     };
 
     fs.writeFileSync(
-        path.join(sharedGeminiDir, 'settings.json'),
+        settingsPath,
         JSON.stringify(userSettings, null, 2),
         'utf-8'
     );
 
-    // 2. 認証ファイルをコピー
-    for (const file of ['oauth_creds.json', 'google_accounts.json', 'installation_id']) {
-        const src = path.join(realGeminiDir, file);
-        if (!fs.existsSync(src)) continue;
-        try { fs.copyFileSync(src, path.join(sharedGeminiDir, file)); } catch (_) {}
+    // 2. 資格情報の存在チェック（警告用）
+    const hasCreds = fs.existsSync(path.join(isolatedGeminiDir, 'oauth_creds.json')) || 
+                    fs.existsSync(path.join(isolatedGeminiDir, 'google_accounts.json'));
+    
+    if (!hasCreds) {
+        console.warn(`[Pool] WARNING: No Gemini credentials found in ${isolatedGeminiDir}. Did you run setup.js / gemini login?`);
     }
 
-    console.log(`[Pool] Prepared shared GEMINI_CLI_HOME: ${sharedHomeDir}`);
+    console.log(`[Pool] Prepared isolated GEMINI_CLI_HOME: ${isolatedHomeDir}`);
     console.log(`[Pool] MCP servers: ${Object.keys(userSettings.mcpServers).join(', ')}`);
-    return sharedHomeDir;
+    return isolatedHomeDir;
 }
 
 class RunnerPool {
@@ -88,8 +89,8 @@ class RunnerPool {
         // サーバー起動時に1度だけ openclaw.json から workspace を解決
         this.workspaceCwd = resolveOpenClawWorkspace();
         
-        // OpenClaw MCPツール入りの共有 GEMINI_CLI_HOME を準備
-        this.sharedGeminiHome = prepareSharedGeminiHome(this.workspaceCwd);
+        // OpenClaw MCPツール入りの独立した GEMINI_CLI_HOME を準備
+        this.isolatedGeminiHome = prepareIsolatedGeminiHome(this.workspaceCwd);
         
         // サーバー起動と同時に事前起動（Warm up）開始
         this.spawnNewRunner();
@@ -106,7 +107,7 @@ class RunnerPool {
             cwd: this.workspaceCwd,
             env: {
                 ...process.env,
-                GEMINI_CLI_HOME: this.sharedGeminiHome,
+                GEMINI_CLI_HOME: this.isolatedGeminiHome,
             }
         });
         

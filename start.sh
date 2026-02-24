@@ -14,6 +14,9 @@ PORT="${GEMINI_ADAPTER_PORT:-3972}"
 LOG_FILE="${SCRIPT_DIR}/logs/adapter.log"
 PID_FILE="${SCRIPT_DIR}/logs/adapter.pid"
 
+# Gemini CLI のホームディレクトリをプラグインローカル（src/.gemini）に設定
+export GEMINI_CLI_HOME="${SCRIPT_DIR}/src/.gemini"
+
 # ランタイム選択: server.js は必ず Node.js を使用
 # Bun の HTTP サーバーは req.on('close') が TCP 切断ではなく body 消費完了で発火するため、
 # クライアント切断検知（Abort 機能）が正しく動作しない。

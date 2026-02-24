@@ -26,3 +26,8 @@ adapter.pid
 *.resolved.*
 *.metadata.json
 *.pb
+
+# Gemini CLI 専用ディレクトリ (隔離環境)
+gemini-home/
+src/.gemini/
+logs/

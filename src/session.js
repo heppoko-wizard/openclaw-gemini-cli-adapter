@@ -9,7 +9,7 @@ const { log } = require('./utils');
 // Session ID mapping (OpenClaw sessionKey ↔ Gemini CLI sessionId)
 // ---------------------------------------------------------------------------
 
-const mapFilePath = path.join(os.homedir(), '.openclaw', 'gemini-session-map.json');
+const mapFilePath = path.join(__dirname, '..', 'gemini-home', 'gemini-session-map.json');
 
 function loadSessionMap() {
     try {

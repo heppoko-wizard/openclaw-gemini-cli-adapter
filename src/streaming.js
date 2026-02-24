@@ -22,7 +22,7 @@ const __dir = path.resolve(__dirname, '..');
  * Returns { env, chatsDir, tempSystemMdPath }.
  */
 function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
-    const homeBaseDir  = path.join(os.homedir(), '.openclaw', 'gemini-sessions');
+    const homeBaseDir  = path.join(__dir, 'gemini-home', 'gemini-sessions');
     const tempHomeDir  = path.join(homeBaseDir, sessionKey);
     const tempGeminiDir = path.join(tempHomeDir, '.gemini');
     const chatsDir = path.join(tempGeminiDir, 'tmp', 'gemini-cli-claw', 'chats');
@@ -30,7 +30,7 @@ function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
     fs.mkdirSync(chatsDir, { recursive: true });
 
     // --- settings.json with MCP server injection ---
-    const realGeminiDir  = path.join(os.homedir(), '.gemini');
+    const realGeminiDir  = path.join(__dir, 'gemini-home', '.gemini');
     const realSettingsPath = path.join(realGeminiDir, 'settings.json');
     let userSettings = {};
     try {
