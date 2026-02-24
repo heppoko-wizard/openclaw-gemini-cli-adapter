@@ -30,14 +30,14 @@ This tool was created to build an agent environment safely while avoiding accoun
 *   A Google account (Browsed-based login is required during setup).
 *   *Note: The installer will automatically detect and download/configure missing requirements such as Node.js (v18+) and the OpenClaw core.*
 
-## Installation Mechanism & Location
+### 1. Installation Mechanism & Location
 
-This adapter is designed as a **portable (self-contained)** tool. It does not copy files to system-wide directories. 
-*   **Location**: The folder where you extract the ZIP or `git clone` becomes the installation directory.
-*   **Mechanism**: The setup script (`setup.js`) simply installs dependencies locally within this folder and registers its **absolute path** as a shortcut in OpenClaw's configuration (`~/.openclaw/openclaw.json`).
-*   **Uninstallation**: Simply delete the folder and remove the reference from `openclaw.json`. No global traces are left except for the Gemini CLI authentication credentials (`~/.gemini`).
+This adapter is designed as a **portable (self-contained)** tool. It does not copy files directly into OpenClaw's internal directories.
 
-## Installation (Quick Start)
+*   **How it works**: The setup script (`setup.js`) registers the **absolute path** of this adapter into OpenClaw's global configuration (`~/.openclaw/openclaw.json`).
+*   **Why we recommend placing it "directly under the OpenClaw folder"**: While OpenClaw can call the adapter from *anywhere* via its absolute path, our installer performs environment checks (such as finding the OpenClaw root for build verification) by looking at its parent directory. Placing it as a sub-folder ensures the smooth execution of the automated setup.
+
+### 2. Installation (Quick Start)
 
 The easiest method is to run the bundled automatic setup script.
 This script fully automates environment checks, cloning/building OpenClaw, adapter registration (`openclaw.json`), and Gemini API authentication (`gemini login`).
