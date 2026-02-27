@@ -268,10 +268,11 @@ async function runSetup(setPrimary) {
         return;
     }
 
-    // [2/4] アダプタ npm install
-    broadcastLog('[2/4] アダプタの依存関係をインストールしています...', 'step_start');
+    // [2/4] アダプタ npm install（Gemini CLI を含む）
+    broadcastLog('[2/4] アダプタの依存関係をインストールしています...（@google/gemini-cli を含む）', 'step_start');
     if (!fs.existsSync(path.join(PLUGIN_DIR, 'node_modules'))) {
-        const depOk = await runCmd('npm install', PLUGIN_DIR, 'アダプタ npm install');
+        broadcastLog('Gemini CLI (@google/gemini-cli) を含む全依存関係をインストールします...', 'log');
+        const depOk = await runCmd('npm install', PLUGIN_DIR, 'アダプタ npm install（Gemini CLI DL含む）');
         if (!depOk) success = false;
     } else {
         broadcastLog('✓ 依存関係はインストール済みです (スキップ)', 'step_done');
@@ -394,13 +395,53 @@ const server = http.createServer((req, res) => {
     // --- API: Auth Start ---
     if (req.method === 'POST' && url.pathname === '/api/auth/start') {
         const localGemini = path.join(PLUGIN_DIR, 'node_modules', '.bin', 'gemini');
-        const geminiCmd = fs.existsSync(localGemini) ? localGemini : 'npx @google/gemini-cli';
-        const [cmd, ...args] = geminiCmd.split(' ');
+        const geminiExists = fs.existsSync(localGemini);
+        let cmd, args;
+        if (geminiExists) {
+            cmd = localGemini;
+            args = ['login'];
+        } else {
+            cmd = 'npx';
+            args = ['--yes', '@google/gemini-cli', 'login'];
+        }
 
-        const child = spawn(cmd, [...args, 'login'], {
+        console.log(`[Auth] Starting: ${cmd} ${args.join(' ')}`);
+        console.log(`[Auth] GEMINI_CLI_HOME: ${GEMINI_CREDS_DIR}`);
+        broadcastLog('Gemini CLI の認証プロセスを開始しています...', 'step_start');
+        broadcastLog(`実行コマンド: ${cmd} ${args.join(' ')}`, 'log');
+
+        // GEMINI_CREDS_DIR が存在しないと gemini が ENOENT で即終了するため事前作成
+        fs.mkdirSync(GEMINI_CREDS_DIR, { recursive: true });
+        broadcastLog(`認証情報ディレクトリ: ${GEMINI_CREDS_DIR}`, 'log');
+
+        const child = spawn(cmd, args, {
             cwd: PLUGIN_DIR,
-            env: { ...process.env, GEMINI_CLI_HOME: GEMINI_CREDS_DIR },
-            stdio: 'pipe',
+            env: {
+                ...process.env,
+                GEMINI_CLI_HOME: GEMINI_CREDS_DIR,
+                TERM: 'xterm-256color',
+                COLORTERM: 'truecolor',
+            },
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        // Gemini CLIの出力をブラウザのSSEログへリアルタイム配信
+        child.stdout.on('data', d => broadcastLog(d.toString().trim(), 'log'));
+        child.stderr.on('data', d => {
+            const msg = d.toString().trim();
+            if (msg) broadcastLog(msg, 'log');
+        });
+
+        child.on('close', (code) => {
+            console.log(`[Auth] gemini login exited with code ${code}`);
+            if (!hasValidCredentials()) {
+                broadcastLog(`gemini login が終了しました (exit code: ${code})`, 'warning');
+            }
+        });
+
+        child.on('error', (err) => {
+            console.error('[Auth] spawn error:', err.message);
+            broadcastLog(`認証プロセスの起動に失敗: ${err.message}`, 'step_error');
         });
 
         let killed = false;
@@ -408,7 +449,8 @@ const server = http.createServer((req, res) => {
             if (hasValidCredentials() && !killed) {
                 killed = true;
                 clearInterval(poll);
-                setTimeout(() => { try { child.kill('SIGKILL'); } catch(e) {} }, 1500);
+                broadcastLog('✓ 認証が完了しました！自動的に次へ進みます...', 'step_done');
+                setTimeout(() => { try { child.kill('SIGKILL'); } catch (e) {} }, 1500);
             }
         }, 2000);
 
