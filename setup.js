@@ -15,8 +15,15 @@ const os = require("os");
 const readline = require("readline");
 
 const SCRIPT_DIR = __dirname;
-const OPENCLAW_ROOT = SCRIPT_DIR;
-const PLUGIN_DIR = path.join(OPENCLAW_ROOT, "gemini-cli-claw");
+let OPENCLAW_ROOT = SCRIPT_DIR;
+let PLUGIN_DIR = path.join(SCRIPT_DIR, "openclaw-gemini-cli-adapter");
+
+// If executed inside the dev plugin repo itself, fix the paths
+if (path.basename(SCRIPT_DIR) === "openclaw-gemini-cli-adapter" || path.basename(SCRIPT_DIR) === "gemini-cli-claw") {
+    OPENCLAW_ROOT = path.join(SCRIPT_DIR, "..");
+    PLUGIN_DIR = SCRIPT_DIR;
+}
+
 const SERVER_JS = path.join(PLUGIN_DIR, "src", "server.js");
 const OPENCLAW_CONFIG = path.join(os.homedir(), ".openclaw", "openclaw.json");
 const GEMINI_CREDS_DIR = path.join(PLUGIN_DIR, "src", ".gemini");
@@ -55,7 +62,56 @@ const MSG = {
         finish: "セットアップが完了しました！",
         configTip: "OpenClaw でこのアダプタを使用するには、~/.openclaw/openclaw.json に以下のように設定してください:",
         tryIt: "さっそく OpenClaw を起動して Gemini CLI と会話してみましょう！",
-        versionNote: "ℹ️ 注意: OpenClaw と Gemini CLI はインストール時点の最新安定版が導入されました。もし不具合が見られる場合は、README に記載された「動作確認環境」のバージョンにダウングレードすることでテスト済み環境を再現できます。"
+        versionNote: "ℹ️ 注意: OpenClaw と Gemini CLI はインストール時点の最新安定版が導入されました。もし不具合が見られる場合は、README に記載された「動作確認環境」のバージョンにダウングレードすることでテスト済み環境を再現できます。",
+        intro: `=================================================
+ OpenClaw × Gemini CLI アダプタ セットアップ
+=================================================
+
+このインストーラーを実行すると、以下の設定が行われます。
+
+【インストールされるもの】
+  1. OpenClaw 本体（AI エージェントのゲートウェイ）
+     - Telegram / WhatsApp などのメッセンジャーに対応する
+     - プロセス: Node.js、ポート 18789
+
+  2. Gemini CLI アダプタ（本ツール）
+     - OpenClaw から Gemini CLI へのリクエストを仲介する
+     - プロセス: Node.js、ポート 3972
+     - Gemini CLI はアダプタ内にサブプロセスとして呼び出される
+
+【起動後の構成イメージ】
+  あなた（Telegram）
+       ↓
+  OpenClaw Gateway（ポート: 18789）
+       ↓ OpenAI互換 API
+  Gemini CLI アダプタ（ポート: 3972）
+       ↓ サブプロセス
+  Gemini CLI → Google Gemini API（クラウド）
+
+【認証について】
+  Gemini API の認証情報はこのアダプタフォルダ内（src/.gemini）に
+  隔離して保存されます。既存の Gemini CLI の設定には影響しません。
+
+【起動時の注意】
+  アダプタを先に起動（./openclaw-gemini-cli-adapter/start.sh）してから、
+  OpenClaw を起動（npm run start）してください。`,
+        warning: `=================================================
+⚠️  このソフトウェアは現在ベータ版です。
+⚠️  デフォルトで YOLO モードが有効です。
+
+  YOLO モードとは：
+  Gemini CLI が「ファイルの作成・編集・削除」「コマンドの実行」などの
+  操作を、確認プロンプトなしに自動で行うモードです。
+
+  以下のような環境では絶対に実行しないでください：
+  ✗ 重要な業務データ・本番環境サーバー
+  ✗ 破壊的な変更が許されないシステム
+  ✗ 不特定多数がアクセスできる共有サーバー
+
+  必ず：
+  ✓ テスト環境または専用の隔離環境で動かす
+  ✓ 実行ログを定期的に確認する
+=================================================`
     },
     en: {
         selectLang: "Select language / 言語選択 / 选择语言 [1] English [2] 日本語 [3] 简体中文 (1/2/3): ",
@@ -89,7 +145,58 @@ const MSG = {
         finish: "Setup complete!",
         configTip: "To use this adapter in OpenClaw, please add the following configuration to your ~/.openclaw/openclaw.json:",
         tryIt: "Start OpenClaw now and try chatting with Gemini CLI!",
-        versionNote: "ℹ️ Note: The latest stable versions of OpenClaw and Gemini CLI have been installed. If you encounter any issues, please check the 'Tested With' section in the README and downgrade to the verified versions to reproduce the test environment."
+        versionNote: "ℹ️ Note: The latest stable versions of OpenClaw and Gemini CLI have been installed. If you encounter any issues, please check the 'Tested With' section in the README and downgrade to the verified versions to reproduce the test environment.",
+        intro: `=================================================
+ OpenClaw x Gemini CLI Adapter Setup
+=================================================
+
+This installer will configure the following:
+
+[What Gets Installed]
+  1. OpenClaw (AI Agent Gateway)
+     - Handles messages from Telegram / WhatsApp, etc.
+     - Process: Node.js, port 18789
+
+  2. Gemini CLI Adapter (this tool)
+     - Bridges requests from OpenClaw to Gemini CLI
+     - Process: Node.js, port 3972
+     - Gemini CLI is invoked as a subprocess inside the adapter
+
+[How It Works After Setup]
+  You (via Telegram)
+       ↓
+  OpenClaw Gateway (port: 18789)
+       ↓  OpenAI-compatible API
+  Gemini CLI Adapter (port: 3972)
+       ↓  subprocess
+  Gemini CLI  →  Google Gemini API (cloud)
+
+[Authentication]
+  Your Gemini API credentials are stored in isolation within
+  this adapter folder (src/.gemini). Your existing global
+  Gemini CLI settings are NOT affected.
+
+[How to Start]
+  1. Start the adapter first: ./openclaw-gemini-cli-adapter/start.sh
+  2. Then start OpenClaw: npm run start`,
+        warning: `=================================================
+⚠️  This software is currently in BETA.
+⚠️  YOLO mode is ENABLED BY DEFAULT.
+
+  What is YOLO mode:
+  Gemini CLI will automatically perform file operations
+  (create, edit, delete) and run commands WITHOUT asking
+  for confirmation.
+
+  DO NOT run this software on:
+  ✗ Production servers or systems with critical data
+  ✗ Systems where destructive changes cannot be tolerated
+  ✗ Shared servers accessible by others
+
+  ALWAYS:
+  ✓ Use a test environment or dedicated isolated machine
+  ✓ Monitor execution logs regularly
+=================================================`
     },
     zh: {
         selectLang: "Select language / 言語選択 / 选择语言 [1] English [2] 日本語 [3] 简体中文 (1/2/3): ",
@@ -123,7 +230,56 @@ const MSG = {
         finish: "安装完成！",
         configTip: "如果要在 OpenClaw 中使用此适配器，请在您的 ~/.openclaw/openclaw.json 中添加以下配置：",
         tryIt: "现在启动 OpenClaw，尝试与 Gemini CLI 聊天吧！",
-        versionNote: "ℹ️ 提示：安装程序已为您下载最新稳定版的 OpenClaw 和 Gemini CLI。如果使用中出现问题，建议您查看 README 中的“测试环境”章节，将组件降级到已验证的版本。"
+        versionNote: "ℹ️ 提示：安装程序已为您下载最新稳定版的 OpenClaw 和 Gemini CLI。如果使用中出现问题，建议您查看 README 中的“测试环境”章节，将组件降级到已验证的版本。",
+        intro: `=================================================
+ OpenClaw x Gemini CLI 适配器 安装程序
+=================================================
+
+本安装程序将进行以下配置：
+
+【安装内容】
+  1. OpenClaw（AI 助理网关）
+     - 接收来自 Telegram / WhatsApp 等消息软件的信息
+     - 进程: Node.js，端口 18789
+
+  2. Gemini CLI 适配器（本工具）
+     - 在 OpenClaw 与 Gemini CLI 之间传递请求
+     - 进程: Node.js，端口 3972
+     - Gemini CLI 以子进程形式在适配器内被调用
+
+【启动后的系统结构】
+  您（通过 Telegram）
+       ↓
+  OpenClaw 网关（端口: 18789）
+       ↓  OpenAI 兼容 API
+  Gemini CLI 适配器（端口: 3972）
+       ↓  子进程
+  Gemini CLI  →  Google Gemini API（云端）
+
+【关于身份验证】
+  您的 Gemini API 凭证将被隔离保存在本工具文件夹内
+  （src/.gemini），不会影响您现有的全局 Gemini CLI 配置。
+
+【启动顺序】
+  1. 先启动适配器: ./openclaw-gemini-cli-adapter/start.sh
+  2. 再启动 OpenClaw: npm run start`,
+        warning: `=================================================
+⚠️  本软件目前处于 Beta 测试阶段。
+⚠️  默认启用 YOLO 模式。
+
+  什么是 YOLO 模式：
+  Gemini CLI 将在不提示确认的情况下，自动执行文件的
+  创建、编辑、删除以及命令执行等操作。
+
+  请勿在以下环境中运行：
+  ✗ 生产服务器或包含重要数据的系统
+  ✗ 不允许破坏性改动的系统
+  ✗ 多人共享访问的服务器
+
+  请务必：
+  ✓ 在测试环境或专用隔离环境中使用
+  ✓ 定期检查执行日志
+=================================================`
     }
 };
 
@@ -199,7 +355,14 @@ async function main() {
     console.log("\n" + L.welcome);
     console.log("=================================================\n");
 
-    // 1. Check & Download OpenClaw
+    // --- Show intro description (what gets installed, architecture overview) ---
+    console.log(L.intro);
+    console.log("");
+
+    // --- Show YOLO mode / Beta warning ---
+    console.log(L.warning);
+    console.log("");
+
     console.log("[1/4] " + L.checkOpenclaw);
     let openclawNeedsBuild = false;
     
@@ -325,11 +488,12 @@ async function main() {
 
     // 2.5 Sync Gemini Models to OpenClaw
     console.log("[~] " + L.syncModels);
-    const syncRes = runCommand("node scripts/update_models.js", PLUGIN_DIR);
+    const syncRes = runCommand("node scripts/update_models.mjs", PLUGIN_DIR);
     if (syncRes.status !== 0) {
         console.error("(!) " + L.syncFail);
+    } else {
+        console.log(L.syncSuccess + "\n");
     }
-    console.log(L.syncSuccess + "\n");
 
     // 3. Register adapter in openclaw.json
     console.log("[3/4] " + L.registerAdapter);
@@ -363,13 +527,52 @@ async function main() {
     if (!fs.existsSync(credsPath1) && !fs.existsSync(credsPath2)) {
         console.log(L.authStart);
         
-        // Prefer the locally installed gemini CLI in gemini-cli-claw, fallback to npx
+        // Prefer the locally installed gemini CLI in openclaw-gemini-cli-adapter, fallback to npx
         const localGeminiPath = path.join(PLUGIN_DIR, "node_modules", ".bin", "gemini");
         const commandToRun = fs.existsSync(localGeminiPath) ? localGeminiPath : "npx gemini";
         
-        // Use --no-browser to avoid terminal hanging issues in headless/SSH setups
-        runCommand(`GEMINI_CLI_HOME="${GEMINI_CREDS_DIR}" ` + commandToRun + " login --no-browser", PLUGIN_DIR);
-        
+        // IMPORTANT: Close readline BEFORE running gemini login.
+        // If rl is open, it holds stdin and the gemini login subprocess
+        // cannot receive the auth code pasted by the user.
+        rl.close();
+
+        // Open browser automatically if possible.
+        // We've already closed readline above, so the terminal is ready for the auth code.
+        await new Promise((resolve) => {
+            const { spawn } = require('child_process');
+            const cmdParts = commandToRun.split(' ');
+            
+            console.log("\n[Gemini TUI Start] Please follow the authentication flow (browser may open).");
+            console.log("When authentication is successful, this installer will detect it and proceed automatically!");
+            console.log("-----------------------------------------");
+            
+            const child = spawn(cmdParts[0], cmdParts.slice(1).concat(['login']), {
+                cwd: PLUGIN_DIR,
+                env: { ...process.env, GEMINI_CLI_HOME: GEMINI_CREDS_DIR },
+                stdio: 'inherit'
+            });
+
+            // Poll for the credentials file. If it exists, login succeeded.
+            const checkInterval = setInterval(() => {
+                if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2)) {
+                    clearInterval(checkInterval);
+                    console.log("\n-----------------------------------------");
+                    console.log("Auth credentials detected. Auto-exiting Gemini CLI...");
+                    setTimeout(() => {
+                        child.kill('SIGINT');
+                        setTimeout(() => {
+                            try { child.kill('SIGKILL'); } catch (e) {}
+                        }, 1000);
+                        resolve();
+                    }, 500); // Give CLI a moment to write everything safely
+                }
+            }, 1000);
+
+            child.on('close', () => {
+                clearInterval(checkInterval);
+                resolve();
+            });
+        });        
         if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2)) {
             console.log(L.authSuccess + "\n");
         } else {

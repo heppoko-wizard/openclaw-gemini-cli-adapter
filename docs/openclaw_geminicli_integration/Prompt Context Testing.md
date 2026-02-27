@@ -1165,7 +1165,7 @@ adapter-template.md
 
 フォルダが変わったのを理解している？
 
-*Listed directory [gemini-cli-claw](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw) *
+*Listed directory [openclaw-gemini-cli-adapter](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter) *
 
 ### User Input
 
@@ -1173,7 +1173,7 @@ adapter-template.md
 
 *Listed directory [d1d8ff14-9705-4fd8-bf63-4845c21fe55f](file:///home/heppo/.gemini/antigravity/brain/d1d8ff14-9705-4fd8-bf63-4845c21fe55f) *
 
-*User accepted the command `mkdir -p /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration && cp /home/heppo/.gemini/antigravity/brain/d1d8ff14-9705-4fd8-bf63-4845c21fe55f/*.md /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/ && cp -r /home/heppo/.gemini/antigravity/brain/d1d8ff14-9705-4fd8-bf63-4845c21fe55f/docs/* /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/`*
+*User accepted the command `mkdir -p /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration && cp /home/heppo/.gemini/antigravity/brain/d1d8ff14-9705-4fd8-bf63-4845c21fe55f/*.md /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/ && cp -r /home/heppo/.gemini/antigravity/brain/d1d8ff14-9705-4fd8-bf63-4845c21fe55f/docs/* /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/`*
 
 ### User Input
 
@@ -1189,7 +1189,7 @@ adapter-template.md
 
 *Listed directory [conversations](file:///home/heppo/.gemini/antigravity/conversations) *
 
-*User accepted the command `cp /home/heppo/.gemini/antigravity/conversations/d1d8ff14-9705-4fd8-bf63-4845c21fe55f.pb /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/`*
+*User accepted the command `cp /home/heppo/.gemini/antigravity/conversations/d1d8ff14-9705-4fd8-bf63-4845c21fe55f.pb /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/`*
 
 *Checked command status*
 
@@ -1229,7 +1229,7 @@ def extract_text(file_path):
         if len(line) > 5 and re.search(r"[a-zA-Z0-9ぁ-んァ-ヶ亜-熙]", line):
             cleaned.append(line)
             
-    with open("/home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/transcript_extracted.txt", "w", encoding="utf-8") as out:
+    with open("/home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/transcript_extracted.txt", "w", encoding="utf-8") as out:
         out.write("\n".join(cleaned))
 
 extract_text("/home/heppo/.gemini/antigravity/conversations/d1d8ff14-9705-4fd8-bf63-4845c21fe55f.pb")
@@ -1237,8 +1237,8 @@ extract_text("/home/heppo/.gemini/antigravity/conversations/d1d8ff14-9705-4fd8-b
 
 *Checked command status*
 
-*Viewed [transcript_extracted.txt](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/transcript_extracted.txt) *
+*Viewed [transcript_extracted.txt](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/transcript_extracted.txt) *
 
 *User accepted the command `find /home/heppo/.gemini/antigravity/brain/d1d8ff14-9705-4fd8-bf63-4845c21fe55f -maxdepth 2`*
 
-*User accepted the command `rm /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/transcript_extracted.txt`*
+*User accepted the command `rm /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/transcript_extracted.txt`*

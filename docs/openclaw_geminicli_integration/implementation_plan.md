@@ -24,9 +24,9 @@ Ollamaと同様に、`api` フィールドで独自のstreamFnを呼び出すよ
 
 ---
 
-### gemini-cli-claw 側の変更
+### openclaw-gemini-cli-adapter 側の変更
 
-#### [MODIFY] [adapter.js](file:///home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/adapter.js) → **廃止または役割変更**
+#### [MODIFY] [adapter.js](file:///home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/adapter.js) → **廃止または役割変更**
 
 現在の `adapter.js` が担っていた「Gemini CLIをspawn」する処理は、新しい `gemini-cli-stream.js`（StreamFn）に移管する。
 

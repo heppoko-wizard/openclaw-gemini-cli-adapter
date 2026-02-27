@@ -59,9 +59,9 @@ OpenAI互換のシステム（OpenClaw）と、Google独自仕様のGemini API�
 
 Gemini CLI 本体がもつ高次機能（自動ツールコールなど）が省かれています。もし今後 MCPツール呼び出しを含めた高度なやりとりが必要になった場合って、geminiCLIの機能がなくアンってるってこと！？それは本末店頭じゃない？てか、検索ツールの使用とか自律的にやっていた気がするんだけど、これ事実と相違してない？通常のGeminiCLIと比べて具体的に何ができなくなってるの？
 
-*Viewed [gemini-core-facade.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/gemini-core-facade.js) *
+*Viewed [gemini-core-facade.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/gemini-core-facade.js) *
 
-*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js) *
+*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js) *
 
 ### Planner Response
 
@@ -77,7 +77,7 @@ Gemini CLI 本体がもつ高次機能（自動ツールコールなど）が省
 
 1. **MCPツール（検索、ファイル操作、コマンド実行など）の自律的利用**
    - 通常のCLIは、AIが「検索が必要だ」と判断すると、自動的にツールを呼び出し、その結果を受け取ってさらに推論を続けるという「ループ処理（Agentic Loop）」を内部で行っています。
-   - 現在の [generateContentDirect](cci:1://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/gemini-core-facade.js:49:0-75:1) は最もローレベルな「1問1答の単なるチャット生成API」を叩いているだけなので、ツール設定が渡されず、**AIが自律的に何かを調べたり実行したりできなくなっています。**
+   - 現在の [generateContentDirect](cci:1://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/gemini-core-facade.js:49:0-75:1) は最もローレベルな「1問1答の単なるチャット生成API」を叩いているだけなので、ツール設定が渡されず、**AIが自律的に何かを調べたり実行したりできなくなっています。**
 
 2. **本当の意味でのストリーミング（逐次生成）**
    - 実は現在のFacade版は、APIから結果を「一括で（全部生成し終わってから）」受け取り、それを無理やりOpenClawに流し込んでいます。そのため、本当の意味での1文字ずつのリアルタイムストリーミングではありません。
@@ -96,10 +96,10 @@ Gemini CLI 本体がもつ高次機能（自動ツールコールなど）が省
 もし、速度よりも**「MCPツールを使った検索や自律的な作業」**を優先される場合、現状では以下の2つの選択肢があります。
 
 **選択肢 A: 一旦、旧仕様（フル機能だが遅い）に戻す**
-[src/streaming.js](cci:7://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js:0:0-0:0) の処理で強制的に `global.useFallbackSpawn = true` に設定すれば、毎回12秒の起動税はかかりますが、今まで通り検索やシステム操作をフル活用する元のGemini CLIモードで動かすことができます。
+[src/streaming.js](cci:7://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js:0:0-0:0) の処理で強制的に `global.useFallbackSpawn = true` に設定すれば、毎回12秒の起動税はかかりますが、今まで通り検索やシステム操作をフル活用する元のGemini CLIモードで動かすことができます。
 
 **選択肢 B: Facade層を「ツールコール対応」に本格改修する**
-今の「高速なメモリ常駐」のまま、中身を単なる [generateContent](cci:1://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/gemini-core-facade.js:49:0-75:1) から、Gemini CLI本来の「ツール推論ループ」や「sendMessageStream」を叩くようにFacade層をさらに深くハックして作り直すアプローチです。（難易度は少し上がりますが、速度と多機能が両立します）
+今の「高速なメモリ常駐」のまま、中身を単なる [generateContent](cci:1://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/gemini-core-facade.js:49:0-75:1) から、Gemini CLI本来の「ツール推論ループ」や「sendMessageStream」を叩くようにFacade層をさらに深くハックして作り直すアプローチです。（難易度は少し上がりますが、速度と多機能が両立します）
 
 ご認識の通り、AIに「自律的な作業」や「検索」をさせてこそのツールですので、現在の「単なるチャットのみ・高速版」では片手落ちです。どちらの方向（とりあえずAで機能を戻すか、Bの本格改修に挑むか）で進めるべきか、ご指示をお願いできますでしょうか？
 
@@ -113,7 +113,7 @@ runGeminiStreamingFallback
 
 これが発動したときってどこかにログが残るようになってる？
 
-*Viewed [server.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/server.js) *
+*Viewed [server.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/server.js) *
 
 ### Planner Response
 
@@ -122,7 +122,7 @@ runGeminiStreamingFallback
 具体的には、**Adapterサーバーのログ出力（通常は `adapter.log` やサーバーを起動したコンソール画面）**に、以下の2つのタイミングでログが記録されます。
 
 ### 1. サーバー起動時のエラーログ（発動した瞬間）
-サーバー起動直後に [initializeGeminiCore()](cci:1://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/gemini-core-facade.js:9:0-47:1) が実行され、もし内部でエラー（Gemini CLIの仕様変更による破壊など）が発生した場合、以下のようなログが出力され、フラグが `true` に切り替わります。
+サーバー起動直後に [initializeGeminiCore()](cci:1://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/gemini-core-facade.js:9:0-47:1) が実行され、もし内部でエラー（Gemini CLIの仕様変更による破壊など）が発生した場合、以下のようなログが出力され、フラグが `true` に切り替わります。
 
 ```text
 Initializing Gemini Core... This may take up to 15 seconds.
@@ -134,14 +134,14 @@ Failed to initialize Gemini Core: [ここになぜ失敗したかの具体的な
 
 ```text
 [fallback] Using legacy spawn mode for request <ランダムなリクエストID>
-spawn (fallback): bun /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/node_modules/.bin/gemini ...
+spawn (fallback): bun /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/.bin/gemini ...
 ```
 
 ### ログの確認場所について
 Gemini CLI Adapter の起動方法にもよりますが、開発ルール (`devrule.md`) における現在の構成では、以下のログファイルに出力・追記される形になっています。
 
 **確認するファイル:**
-[/home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/adapter.log](cci:7://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/adapter.log:0:0-0:0)
+[/home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/adapter.log](cci:7://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/adapter.log:0:0-0:0)
 
 もし動作がおかしくて「あれ？遅いぞ？（＝フォールバックが発動している？）」と疑わしい場合は、この `adapter.log` 内に `fallback` や `Failed to initialize Gemini Core` という文字列が残っていないか検索することで、安全弁が稼働しているかどうかをすぐに確認できます。
 
@@ -149,26 +149,26 @@ Gemini CLI Adapter の起動方法にもよりますが、開発ルール (`devr
 
 うーん、一回両方再起動してみて。普通にチャットを送ると今はローレベルのAPIを叩くんだよね
 
-*User accepted the command `ps aux | grep -iE 'openclaw|gemini-cli-claw|node' | grep -v grep`*
+*User accepted the command `ps aux | grep -iE 'openclaw|openclaw-gemini-cli-adapter|node' | grep -v grep`*
 
 *Checked command status*
 
 *User accepted the command `kill -9 $(lsof -t -i :3972) $(lsof -t -i :18789) 2>/dev/null || true
 pkill -f "mcp-server.mjs" 2>/dev/null || true
 sleep 1
-cd /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw
+cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
 nohup ./start.sh > adapter-nohup.log 2>&1 &
 cd /home/heppo/ドキュメント/DEV/openclaw
 nohup npm run start > openclaw-gateway.log 2>&1 &
 sleep 3
 `*
 
-*User accepted the command `tail -n 20 /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/adapter-nohup.log
+*User accepted the command `tail -n 20 /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/adapter-nohup.log
 tail -n 20 /home/heppo/ドキュメント/DEV/openclaw/openclaw-gateway.log`*
 
 *Checked command status*
 
-*User accepted the command `ps aux | grep -iE 'openclaw|gemini-cli-claw|node' | grep -v grep`*
+*User accepted the command `ps aux | grep -iE 'openclaw|openclaw-gemini-cli-adapter|node' | grep -v grep`*
 
 *Checked command status*
 
@@ -176,12 +176,12 @@ tail -n 20 /home/heppo/ドキュメント/DEV/openclaw/openclaw-gateway.log`*
 nohup node openclaw.mjs gateway --port 18789 > openclaw-gateway.log 2>&1 &
 sleep 2
 tail -n 20 openclaw-gateway.log
-tail -n 20 gemini-cli-claw/adapter-nohup.log`*
+tail -n 20 openclaw-gemini-cli-adapter/adapter-nohup.log`*
 
 *Checked command status*
 
 *User accepted the command `tail -n 20 openclaw-gateway.log
-tail -n 20 gemini-cli-claw/adapter.log`*
+tail -n 20 openclaw-gemini-cli-adapter/adapter.log`*
 
 ### User Input
 
@@ -191,7 +191,7 @@ tail -n 20 gemini-cli-claw/adapter.log`*
 
 はい、おっしゃる通りです。**完全にその通り（両方とも使えない状態）**です。
 
-現在のローレベルAPI（[generateContent](cci:1://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/gemini-core-facade.js:49:0-75:1)）を直接叩く実装では、ツールを使用するための設定や「ツールループ（AIがツールを使いたいと返してきたら、裏側で実行してその結果を再度AIに渡す処理）」をごっそりバイパスしています。
+現在のローレベルAPI（[generateContent](cci:1://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/gemini-core-facade.js:49:0-75:1)）を直接叩く実装では、ツールを使用するための設定や「ツールループ（AIがツールを使いたいと返してきたら、裏側で実行してその結果を再度AIに渡す処理）」をごっそりバイパスしています。
 
 そのため、
 1. **Gemini CLI 標準の激強ツール**（ローカルファイルの読み書き、ターミナルコマンドの実行、ウェブ検索など）
@@ -216,13 +216,13 @@ init状態でひとまず待機モードで停止
 
 init後に待機する改変をうまく行えればだけど
 
-*User accepted the command `find /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli -name "*.js" | grep -E 'cli|runner|index|main'`*
+*User accepted the command `find /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli -name "*.js" | grep -E 'cli|runner|index|main'`*
 
 *Checked command status*
 
 *Grep searched codebase*
 
-*User accepted the command `find /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli-core -name "*.js" | grep -E 'client|gemini|api'`*
+*User accepted the command `find /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli-core -name "*.js" | grep -E 'client|gemini|api'`*
 
 *Checked command status*
 
@@ -230,37 +230,37 @@ init後に待機する改変をうまく行えればだけど
 
 *Grep searched codebase*
 
-*Viewed [client.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli-core/dist/src/core/client.js) *
+*Viewed [client.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli-core/dist/src/core/client.js) *
 
-*Viewed [client.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli-core/dist/src/core/client.js) *
+*Viewed [client.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli-core/dist/src/core/client.js) *
 
-*User accepted the command `find /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli -name "*.js" | grep -iE 'runner|run|execute|cli|index'`*
+*User accepted the command `find /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli -name "*.js" | grep -iE 'runner|run|execute|cli|index'`*
 
 *Checked command status*
 
-*Viewed [nonInteractiveCliCommands.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/nonInteractiveCliCommands.js) *
+*Viewed [nonInteractiveCliCommands.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/nonInteractiveCliCommands.js) *
 
-*Viewed [index.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/index.js) *
+*Viewed [index.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/index.js) *
 
-*Viewed [gemini.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/gemini.js) *
+*Viewed [gemini.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/gemini.js) *
 
-*Viewed [nonInteractiveCli.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/nonInteractiveCli.js) *
+*Viewed [nonInteractiveCli.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/nonInteractiveCli.js) *
 
 *Edited relevant file*
 
 ### User Input
 
-いや、もっと簡単に考えようよ。ループ関数はそのまま使いまわして、-pモードで、プロンプトが渡される直前の状態で停止できるようにるればいいだけだよ。それなら、ループ実行関数もそのまま使えるでしょ@[/home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/openclaw_geminicli_integration] これと,ソースコードをまず読んで。全体を把握してから答えて
+いや、もっと簡単に考えようよ。ループ関数はそのまま使いまわして、-pモードで、プロンプトが渡される直前の状態で停止できるようにるればいいだけだよ。それなら、ループ実行関数もそのまま使えるでしょ@[/home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/openclaw_geminicli_integration] これと,ソースコードをまず読んで。全体を把握してから答えて
 
-*Listed directory [openclaw_geminicli_integration](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/openclaw_geminicli_integration) *
+*Listed directory [openclaw_geminicli_integration](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/openclaw_geminicli_integration) *
 
-*Viewed [README.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/README.md) *
+*Viewed [README.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/README.md) *
 
-*Viewed [development_chronicle.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/devlog/development_chronicle.md) *
+*Viewed [development_chronicle.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/devlog/development_chronicle.md) *
 
-*Viewed [architecture.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/architecture.md) *
+*Viewed [architecture.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/architecture.md) *
 
-*Viewed [nonInteractiveCli.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/nonInteractiveCli.js) *
+*Viewed [nonInteractiveCli.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/nonInteractiveCli.js) *
 
 *Edited relevant file*
 
@@ -286,7 +286,7 @@ init後に待機する改変をうまく行えればだけど
 
 *Edited relevant file*
 
-*Viewed [gemini-core-facade.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/gemini-core-facade.js) *
+*Viewed [gemini-core-facade.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/gemini-core-facade.js) *
 
 *Edited relevant file*
 
@@ -302,27 +302,27 @@ init後に待機する改変をうまく行えればだけど
 
 *Edited relevant file*
 
-*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js) *
+*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js) *
 
 *Edited relevant file*
 
 *Edited relevant file*
 
-*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js) *
+*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js) *
 
-*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js) *
+*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js) *
 
-*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js) *
+*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js) *
 
-*Viewed [server.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/server.js) *
-
-*Edited relevant file*
-
-*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js) *
+*Viewed [server.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/server.js) *
 
 *Edited relevant file*
 
-*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js) *
+*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js) *
+
+*Edited relevant file*
+
+*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js) *
 
 *Edited relevant file*
 
@@ -340,9 +340,9 @@ init後に待機する改変をうまく行えればだけど
 
 *Checked command status*
 
-*Viewed [nonInteractiveCli.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/nonInteractiveCli.js) *
+*Viewed [nonInteractiveCli.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/nonInteractiveCli.js) *
 
-*Viewed [sessionUtils.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/utils/sessionUtils.js) *
+*Viewed [sessionUtils.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/utils/sessionUtils.js) *
 
 *Edited relevant file*
 
@@ -362,19 +362,19 @@ init後に待機する改変をうまく行えればだけど
 
 *Checked command status*
 
-*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/streaming.js) *
+*Viewed [streaming.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/streaming.js) *
 
-*Viewed [nonInteractiveCli.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/nonInteractiveCli.js) *
-
-*Grep searched codebase*
-
-*Viewed [runner.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/src/runner.js) *
+*Viewed [nonInteractiveCli.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/nonInteractiveCli.js) *
 
 *Grep searched codebase*
 
-*Viewed [gemini.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/gemini.js) *
+*Viewed [runner.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/src/runner.js) *
 
-*Viewed [gemini.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli/dist/src/gemini.js) *
+*Grep searched codebase*
+
+*Viewed [gemini.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/gemini.js) *
+
+*Viewed [gemini.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli/dist/src/gemini.js) *
 
 *Edited relevant file*
 
@@ -423,7 +423,7 @@ localhost 接続が拒否されました。
 
 プロセスが両方とも落ちていますね。`adapter.log` の末尾を確認して原因を調べます。
 
-*User accepted the command `tail -50 /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/adapter.log`*
+*User accepted the command `tail -50 /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/adapter.log`*
 
 *User accepted the command `tail -20 /home/heppo/ドキュメント/DEV/openclaw/openclaw-gateway.log`*
 
@@ -984,7 +984,7 @@ sed -i 's/- \[ \] 死んでいる残りのリンクのリストアップと処�
 *User accepted the command `nohup ./start.sh > adapter.log 2>&1 &
 nohup node openclaw.mjs gateway --port 18789 > openclaw-gateway.log 2>&1 &`*
 
-*User accepted the command `tail -n 10 /home/heppo/ドキュメント/DEV/openclaw/openclaw-gateway.log && tail -n 10 /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/adapter.log`*
+*User accepted the command `tail -n 10 /home/heppo/ドキュメント/DEV/openclaw/openclaw-gateway.log && tail -n 10 /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/adapter.log`*
 
 ### User Input
 
@@ -1117,7 +1117,7 @@ OpenClaw へのブラウザからの接続 URL は以下になります。
 
 *Searched filesystem*
 
-*Viewed [web-search.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli-core/dist/src/tools/web-search.js) *
+*Viewed [web-search.js](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli-core/dist/src/tools/web-search.js) *
 
 ### Planner Response
 
@@ -1127,7 +1127,7 @@ OpenClaw へのブラウザからの接続 URL は以下になります。
 
 ## 事実：Gemini CLI の `google_web_search` が何をしているか
 
-[web-search.js](cci:7://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/node_modules/@google/gemini-cli-core/dist/src/tools/web-search.js:0:0-0:0) の25行目が核心部分です。
+[web-search.js](cci:7://file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/node_modules/@google/gemini-cli-core/dist/src/tools/web-search.js:0:0-0:0) の25行目が核心部分です。
 
 ```js
 const response = await geminiClient.generateContent(
@@ -1199,11 +1199,11 @@ Gemini CLI は別途 `web_fetch` 的なツールを呼んでいるわけでは�
 
 *Checked command status*
 
-*Viewed [development_chronicle.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/devlog/development_chronicle.md) *
+*Viewed [development_chronicle.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/devlog/development_chronicle.md) *
 
 *Viewed [devlog_format.md](file:///home/heppo/.gemini/antigravity/skills/engineering-devlog/references/devlog_format.md) *
 
-*Viewed [development_chronicle.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/gemini-cli-claw/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/devlog/development_chronicle.md) *
+*Viewed [development_chronicle.md](file:///home/heppo/%E3%83%89%E3%82%AD%E3%83%A5%E3%83%A1%E3%83%B3%E3%83%88/DEV/openclaw/openclaw-gemini-cli-adapter/docs/openclaw_geminicli_integration/openclaw_geminicli_integration/devlog/development_chronicle.md) *
 
 ### Planner Response
 

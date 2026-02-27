@@ -3,7 +3,7 @@
 'use strict';
 
 /**
- * gemini-cli-claw / server.js
+ * openclaw-gemini-cli-adapter / server.js
  *
  * OpenAI-compatible HTTP server that bridges OpenClaw's embedded agent path
  * (runEmbeddedPiAgent) to Google's Gemini CLI tool.
@@ -48,7 +48,7 @@ const server = http.createServer(async (req, res) => {
     // Health check
     if (req.method === 'GET' && url.pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', adapter: 'gemini-cli-claw' }));
+        res.end(JSON.stringify({ status: 'ok', adapter: 'openclaw-gemini-cli-adapter' }));
         return;
     }
 

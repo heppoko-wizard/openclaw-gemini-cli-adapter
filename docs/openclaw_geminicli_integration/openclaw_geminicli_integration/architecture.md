@@ -35,7 +35,7 @@ graph TD
 |------|------|------|
 | **設定ファイル** | `~/.openclaw/openclaw.json` | プロバイダ設定およびUIに表示するGeminiモデル一覧（唯一の真実源） |
 | **マッピング** | `~/.openclaw/gemini-session-map.json` | OpenClawのKeyとGemini CLIのUUIDを紐付け |
-| **履歴データ** | `~/.openclaw/gemini-sessions/<session_key>/.gemini/tmp/gemini-cli-claw/chats/` | Geminiコマンドの作業ディレクトリ（内部セッション状態など） |
+| **履歴データ** | `~/.openclaw/gemini-sessions/<session_key>/.gemini/tmp/openclaw-gemini-cli-adapter/chats/` | Geminiコマンドの作業ディレクトリ（内部セッション状態など） |
 | **起動スクリプト** | `start.sh` | アダプタサーバーをバックグラウンドで起動 |
 | **同期スクリプト** | `scripts/update_models.js` | Gemini CLIからモデル一覧を取得し、`openclaw.json` に同期する |
 | **ログ** | `logs/adapter.log` | アダプタ自身の動作ログ（モデル選択やプロファイリング情報、重要） |

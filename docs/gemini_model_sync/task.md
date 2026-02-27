@@ -1,16 +1,16 @@
 # Task: Gemini CLI Claw - Dynamic Model Selection Integration
 
 ## Objective
-Integrate dynamic model selection (Flash, Pro, Auto) into OpenClaw's UI and `gemini-cli-claw`.
+Integrate dynamic model selection (Flash, Pro, Auto) into OpenClaw's UI and `openclaw-gemini-cli-adapter`.
 
 ## Steps
 - [x] **Research Phase**
   - [x] Investigate OpenClaw's model listing architecture (`models.json`, `loadModelCatalog`, etc.).
   - [x] Formulate integration plan.
 - [x] **Implementation Phase**
-  - [x] Modify `gemini-cli-claw/src/server.js` to return multiple available models dynamically sourced from `@google/gemini-cli-core` in the `/v1/models` endpoint.
+  - [x] Modify `openclaw-gemini-cli-adapter/src/server.js` to return multiple available models dynamically sourced from `@google/gemini-cli-core` in the `/v1/models` endpoint.
   - [x] Ensure `server.js` transparently passes the chosen model string from `req.body.model` to `geminiClient`.
-  - [x] Create a Node script in `gemini-cli-claw/scripts/update_models.js` that fetches the models from the Gemini CLI core and updates `~/.openclaw/agent/models.json`. Update `setup.js` to call this script.
+  - [x] Create a Node script in `openclaw-gemini-cli-adapter/scripts/update_models.js` that fetches the models from the Gemini CLI core and updates `~/.openclaw/agent/models.json`. Update `setup.js` to call this script.
 - [x] **Verification Phase**
   - [x] Restart OpenClaw gateway and adapter.
   - [x] Verify that UI shows multiple models under `gemini-adapter`.

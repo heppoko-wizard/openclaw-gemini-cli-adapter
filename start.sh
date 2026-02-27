@@ -37,7 +37,7 @@ if [[ -f "$PID_FILE" ]]; then
 fi
 
 echo "[start.sh] Syncing models to OpenClaw config..."
-$RUNTIME "$SCRIPT_DIR/scripts/update_models.js" || echo "[start.sh] Warning: Failed to sync models"
+$RUNTIME "$SCRIPT_DIR/scripts/update_models.mjs" || echo "[start.sh] Warning: Failed to sync models"
 
 # Create logs directory if it doesn't exist
 mkdir -p "$SCRIPT_DIR/logs"

@@ -25,7 +25,7 @@ function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
     const homeBaseDir  = path.join(__dir, 'gemini-home', 'gemini-sessions');
     const tempHomeDir  = path.join(homeBaseDir, sessionKey);
     const tempGeminiDir = path.join(tempHomeDir, '.gemini');
-    const chatsDir = path.join(tempGeminiDir, 'tmp', 'gemini-cli-claw', 'chats');
+    const chatsDir = path.join(tempGeminiDir, 'tmp', 'openclaw-gemini-cli-adapter', 'chats');
 
     fs.mkdirSync(chatsDir, { recursive: true });
 

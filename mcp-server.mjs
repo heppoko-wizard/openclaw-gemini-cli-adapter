@@ -27,7 +27,7 @@ import path from "node:path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// The openclaw repo root is one level above this `gemini-cli-claw/` directory.
+// The openclaw repo root is one level above this `openclaw-gemini-cli-adapter/` directory.
 const OPENCLAW_ROOT = path.resolve(__dirname, "..");
 const OPENCLAW_DIST = path.join(OPENCLAW_ROOT, "dist", "index.js");
 

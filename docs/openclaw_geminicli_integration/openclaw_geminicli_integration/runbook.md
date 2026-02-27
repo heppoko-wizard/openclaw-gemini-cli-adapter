@@ -7,7 +7,7 @@ Gemini CLI Adapter と OpenClaw Gateway の2つのプロセスを起動する必
 
 ```bash
 # アダプタサーバーの起動 (Port: 3972)
-cd /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw
+cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
 nohup ./start.sh > logs/adapter-nohup.log 2>&1 &
 
 # OpenClaw Gatewayの起動 (Port: 18789)
@@ -52,9 +52,9 @@ kill $(lsof -t -i :3972) $(lsof -t -i :18789)
 |------|------|
 | Adapter ポート | 3972 |
 | OpenClaw ポート | 18789 |
-| アダプタログ | `/home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/logs/adapter.log` |
+| アダプタログ | `/home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/logs/adapter.log` |
 | Gatewayログ | `/home/heppo/ドキュメント/DEV/openclaw/openclaw-gateway.log` |
-| 直近リクエスト | `/home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/logs/adapter_last_req.json` |
+| 直近リクエスト | `/home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/logs/adapter_last_req.json` |
 
 ---
 

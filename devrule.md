@@ -8,7 +8,8 @@ Gemini CLIをOpenClawから利用するには、2つのプロセスを起動す�
 - **役割**: ポート `3972` で動作し、OpenClawからのリクエストをGemini CLIコマンドに変換する。
 - **起動コマンド**:
   ```bash
-  /home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/start.sh
+  cd <PLUGIN_DIR> # 例: openclaw-gemini-cli-adapter
+  ./start.sh
   ```
   ※ プロセスが残っているか確認・強制終了する場合は `kill $(lsof -t -i :3972)`
 
@@ -16,7 +17,7 @@ Gemini CLIをOpenClawから利用するには、2つのプロセスを起動す�
 - **役割**: クライアント（Telegram等）からのメッセージを受け付け、設定されたモデルプロバイダへ転送する。
 - **起動コマンド**:
   ```bash
-  cd /home/heppo/ドキュメント/DEV/openclaw
+  cd <OPENCLAW_ROOT>
   npm run start
   # または特定ポートで起動する場合
   # node openclaw.mjs gateway --port 18789
@@ -32,7 +33,7 @@ Gemini CLIをOpenClawから利用するには、2つのプロセスを起動す�
 - **セッション履歴**: `~/.openclaw/sessions/` 内の該当セッションファイル（JSON）
 
 ### ② Gemini CLI アダプタ側のログ
-- **ログ**: `/home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/adapter.log`
+- **ログ**: `<PLUGIN_DIR>/logs/adapter.log`
 - **確認内容**:
   - `Incoming request: POST /responses` などの着信記録
   - `Request body: {...}` の中身（OpenClawからどんなフォーマットで履歴が送られてきているか。例: `messages` か `input` か）
@@ -40,7 +41,7 @@ Gemini CLIをOpenClawから利用するには、2つのプロセスを起動す�
 
 ### ③ Gemini CLI 側の内部セッション
 - **UUIDマッピング**: `~/.openclaw/gemini-session-map.json` (OpenClawのセッションキーとGemini CLIが生成したUUIDの紐付け)
-- **セッションファイル**: `~/.openclaw/gemini-sessions/<sessionKey>/.gemini/tmp/gemini-cli-claw/chats/session-*.json`
+- **セッションファイル**: `~/.openclaw/gemini-sessions/<sessionKey>/.gemini/tmp/openclaw-gemini-cli-adapter/chats/session-*.json`
 - **確認内容**: アダプタが正しくOpenClawの履歴をこのファイルに注入（上書き）できているか。
 
 ## 3. 問題解決フロー（トラブルシューティング）

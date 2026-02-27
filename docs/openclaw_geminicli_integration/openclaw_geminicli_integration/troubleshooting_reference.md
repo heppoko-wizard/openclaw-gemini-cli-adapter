@@ -5,7 +5,7 @@ OpenClaw ↔ Gemini CLI 連携において、「会話が通らない」「ツ�
 ## 1. ログファイル (Logs)
 エラーの直接的な原因を探るための一次情報源です。
 
-* **`/home/heppo/ドキュメント/DEV/openclaw/gemini-cli-claw/adapter.log`**
+* **`/home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/adapter.log`**
   * **役割**: アダプタサーバーの標準出力・エラー。
   * **確認ポイント**:
     * `Incoming request: POST /responses` が来ているか（OpenClawからリクエストが届いているか）
@@ -26,7 +26,7 @@ OpenClaw ↔ Gemini CLI 連携において、「会話が通らない」「ツ�
   * **確認ポイント**:
     * `messages` 配列の中に、過去のツール実行結果（`role: "tool"` 等）が含まれているか（記憶喪失の確認）
 
-* **`~/.openclaw/gemini-sessions/<Session_Key>/.gemini/tmp/gemini-cli-claw/chats/<UUID>.json`**
+* **`~/.openclaw/gemini-sessions/<Session_Key>/.gemini/tmp/openclaw-gemini-cli-adapter/chats/<UUID>.json`**
   * **役割**: Gemini CLIが内部で保持している会話履歴。
   * **確認ポイント**: Adapterがこのファイルに正常に `history` を上書きできているか。
 
