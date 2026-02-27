@@ -66,11 +66,14 @@ const MSG = {
   ✓ 設定・認証情報は一切共有されません。
   ✓ 認証後は Gemini CLI の TUI が自動終了します。
 -------------------------------------------------`,
-        authNeeded: "認証が見つかりません。このまま Gemini アカウントでログインしますか？ (Y/n): ",
+        authNeeded: "認証が見つかりません。このまま Google アカウントでログインしますか？ (Y/n): ",
 
         authStart: "認証を開始します。ターミナルに表示される指示に従ってログインしてください...",
+        authTuiStart: "\n[Gemini 認証開始] ブラウザが開くので、認証を進めてください。",
+        authTuiTip: "※ 意味がわからない時は、とりあえず「エンターキー」だけ押してください！\n※ ブラウザが自動で開いたら、使いたい Google アカウントでログインするだけでOKです。",
         authSuccess: "✓ Gemini 認証完了",
         authMissingTip: "情報: 認証資格情報がまだ見つかりません。後で手動で `npx @google/gemini-cli login` を実行する必要があるかもしれません。",
+
         finish: "セットアップが完了しました！",
         configTip: "OpenClaw でこのアダプタを使用するには、~/.openclaw/openclaw.json に以下のように設定してください:",
         tryIt: "さっそく OpenClaw を起動して Gemini CLI と会話してみましょう！",
@@ -164,8 +167,11 @@ const MSG = {
         authNeeded: "Authentication not found. Log in with your Google account now? (Y/n): ",
 
         authStart: "Starting authentication. Please follow the instructions to login...",
+        authTuiStart: "\n[Gemini Auth Start] A browser window should open for authentication.",
+        authTuiTip: "* If you are unsure what to do, just press \"Enter\"!\n* When the browser opens, simply login with your preferred Google account.",
         authSuccess: "✓ Gemini authentication complete",
         authMissingTip: "Info: Authentication credentials still not found. You may need to manually run `npx @google/gemini-cli login` later.",
+
         finish: "Setup complete!",
         configTip: "To use this adapter in OpenClaw, please add the following configuration to your ~/.openclaw/openclaw.json:",
         tryIt: "Start OpenClaw now and try chatting with Gemini CLI!",
@@ -261,6 +267,8 @@ This installer will configure the following:
         authNeeded: "未发现身份验证。现在使用 Google 账号登录吗？ (Y/n): ",
 
         authStart: "开始身份验证。请按照终端显示的说明进行登录...",
+        authTuiStart: "\n[Gemini 认证开始] 浏览器窗口应会打开以进行身份验证。",
+        authTuiTip: "* 如果您不确定该怎么做，只需按“回车”键即可！\n* 浏览器打开后，只需使用您首选的 Google 账号登录即可。",
         authSuccess: "✓ Gemini 身份验证完成",
         authMissingTip: "提示：仍未发现身份验证凭据。您稍后可能需要手动运行 `npx @google/gemini-cli login`。",
         finish: "安装完成！",
@@ -582,7 +590,8 @@ async function main() {
                 const { spawn } = require('child_process');
                 const cmdParts = commandToRun.split(' ');
                 
-                console.log("\n[Gemini TUI Start] Please follow the authentication flow (browser may open).");
+                console.log(L.authTuiStart);
+                console.log(L.authTuiTip);
                 console.log("When authentication is successful, this installer will detect it and proceed automatically!");
                 console.log("-----------------------------------------");
                 
