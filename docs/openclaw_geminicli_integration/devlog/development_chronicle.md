@@ -424,15 +424,17 @@
 - **Gateway 起動コマンドの修正**: `launch.sh`・`launch.bat` が `npm run start`（ヘルプ画面表示のコマンド）を呼んでいたためGatewayサーバーが立ち上がらなかった不具合を特定。`npm run openclaw -- gateway` に修正し、ポート18789が開くまで最大60秒ポーリングで待機してからダッシュボードURLを開く起動ループを追加。
 - **`models.primary` 自動クリーンアップのロジック強化**: `update_models.mjs` が `config.models.primary` の存在を `in` 演算子で確実にチェックして強制削除するよう修正。これにより OpenClaw 2026.2.26 以降で発生する "Unrecognized key: primary" エラーを起動のたびに自動解消できるようになった。
 - **ユーティリティスクリプトの拡充**: 一括キルスクリプト (`stop.sh`, `stop.bat`) を新規作成。ポート3972, 18789, 19878 および残存 Runner を一掃できるようにした。また `relogin.js`, `uninstall.sh`, `package.json` などを正式にリポジトリへ追加。
+- **通信フリーズ障害の修正**: Gemini API 側から「No capacity available (容量不足)」など `type: 'result', status: 'error'` のシステムエラーが返却された際に、Adapter が握りつぶして OpenClaw に何も返さず UI が永遠にフリーズする問題が発覚。SSE ストリームチャンクとして `⚠️ [Gemini API Error]` を明示的に表示するよう `src/streaming.js` を修正した。
 
 ### 発見・学んだこと
 - **Gemini CLI の GEMINI_CLI_HOME 仕様**: `GEMINI_CLI_HOME` に指定したディレクトリの「中」に Gemini CLI が自動的に `.gemini` サブフォルダを作成する。つまり `GEMINI_CLI_HOME=src/.gemini` と設定すると `src/.gemini/.gemini/` という二重ネストが必然的に生まれる。隔離の起点ディレクトリと、資格情報の実際の格納先（`起点/.gemini/`）を明確に区別して設計しなければならない。
 - **`npm run start` の罠**: OpenClaw プロジェクトの `start` スクリプトは Gateway を起動するのではなく、単なる CLIエントリポイント（コマンド一覧の表示）であった。Gateway を起動する正しいコマンドは `node openclaw.mjs gateway` または `npm run openclaw -- gateway`。
+- **エラーイベントの仕様**: Gemini CLI の `stream-json` 出力において、致命的な API エラーは `type: 'error'` ではなく `type: 'result', status: 'error'` で返ってくることに注意が必要。
 
 ### ハマったこと・失敗
-- **現象**: Dashboard URL がログに出るのにブラウザからアクセスできない。
-- **原因**: `npm run start` は Gateway HTTPサーバーを起動せず、コマンドリストを表示して即終了していた。ポート18789は一切開かれていなかった。
-- **対処**: `launch.sh` の Gateway コマンドを `npm run openclaw -- gateway` に修正。
+- **現象**: OpenClaw の UI で返事が急に返ってこなくなり、ローディングアニメーションのまま固まる。
+- **原因**: Gemini API の Rate Limit / Capacity Limit に到達したエラー出力を、Adapter 側の実装不備で適切にパースして中継していなかった。
+- **対処**: `src/streaming.js` の `case 'result':` ブロック内にエラーステータスの検証ロジックを追加し、フロントエンドに生のエラーテキストを送信するよう修正。
 
 ### 変更したファイル
 - `start.sh` — GEMINI_CLI_HOME を `src/.gemini` から `gemini-home` へ修正
@@ -446,6 +448,7 @@
 - `setup.js` — 資格情報チェックのパスを `.gemini` サブディレクトリに統一
 - `launch.sh`, `launch.bat` — Gateway起動コマンドを正しいサブコマンドに修正、起動待機ループを追加
 - `stop.sh`, `stop.bat` — 一括終了スクリプトを新規作成
+- `src/streaming.js` — `type: result` にネストされた API エラー応答の伝達ロジックを追加
 
 ### 残った課題・TODO
 - [ ] 現実環境でのエンドツーエンドのクリーンインストールテスト
@@ -456,3 +459,4 @@
 - `22dfea63` — fix(paths): resolve nested .gemini dir bug and unify all paths to gemini-home
 - `333767ae` — docs(devlog): add session 21 entries for path unification and gateway fix
 - `507204f2` — feat(scripts): add stop.sh and stop.bat to manage process lifecycle
+- `29e50059` — fix(streaming): properly relay 'result' type errors to OpenClaw UX

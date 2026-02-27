@@ -1,7 +1,7 @@
 'use strict';
 
-const fs   = require('fs');
-const os   = require('os');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { log, randomId, sseWrite } = require('./utils');
 
@@ -22,22 +22,22 @@ const __dir = path.resolve(__dirname, '..');
  * Returns { env, chatsDir, tempSystemMdPath }.
  */
 function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
-    const homeBaseDir  = path.join(__dir, 'gemini-home', 'gemini-sessions');
-    const tempHomeDir  = path.join(homeBaseDir, sessionKey);
+    const homeBaseDir = path.join(__dir, 'gemini-home', 'gemini-sessions');
+    const tempHomeDir = path.join(homeBaseDir, sessionKey);
     const tempGeminiDir = path.join(tempHomeDir, '.gemini');
     const chatsDir = path.join(tempGeminiDir, 'tmp', 'openclaw-gemini-cli-adapter', 'chats');
 
     fs.mkdirSync(chatsDir, { recursive: true });
 
     // --- settings.json with MCP server injection ---
-    const realGeminiDir  = path.join(__dir, 'gemini-home', '.gemini');
+    const realGeminiDir = path.join(__dir, 'gemini-home', '.gemini');
     const realSettingsPath = path.join(realGeminiDir, 'settings.json');
     let userSettings = {};
     try {
         if (fs.existsSync(realSettingsPath)) {
             userSettings = JSON.parse(fs.readFileSync(realSettingsPath, 'utf-8'));
         }
-    } catch (_) {}
+    } catch (_) { }
 
     userSettings.mcpServers = userSettings.mcpServers || {};
     userSettings.mcpServers['openclaw-tools'] = {
@@ -55,7 +55,7 @@ function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
     for (const file of ['oauth_creds.json', 'google_accounts.json', 'installation_id']) {
         const src = path.join(realGeminiDir, file);
         if (!fs.existsSync(src)) continue;
-        try { fs.copyFileSync(src, path.join(tempGeminiDir, file)); } catch (_) {}
+        try { fs.copyFileSync(src, path.join(tempGeminiDir, file)); } catch (_) { }
     }
 
     // --- Write system prompt to a temp .md file ---
@@ -107,7 +107,7 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
 
     try {
         log(`[adapter] Acquiring runner for sessionKey: ${sessionKey}`);
-        
+
         // 履歴をGemini CLIの内部SessionData形式に合成する
         let resumedSessionData = undefined;
         if (messages && messages.length > 0) {
@@ -151,8 +151,8 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
             if (aborted) return;
             aborted = true;
             log('[abort] Client disconnected. Killing runner process.');
-            try { runner.kill('SIGTERM'); } catch (_) {}
-            setTimeout(() => { try { runner.kill('SIGKILL'); } catch (_) {} }, 3000);
+            try { runner.kill('SIGTERM'); } catch (_) { }
+            setTimeout(() => { try { runner.kill('SIGKILL'); } catch (_) { } }, 3000);
         };
 
         // Runner が正常終了した場合は aborted フラグを立てて二重 kill を防止
@@ -183,6 +183,20 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                     case 'result':
                         if (json.session_id && onSessionId) {
                             onSessionId(json.session_id);
+                        }
+                        if (json.type === 'result' && json.status === 'error') {
+                            const errMsg = json.error ? json.error.message : JSON.stringify(json);
+                            sseWrite(res, {
+                                id: responseId,
+                                object: 'chat.completion.chunk',
+                                created: Math.floor(Date.now() / 1000),
+                                model: 'gemini',
+                                choices: [{
+                                    index: 0,
+                                    delta: { content: `\n⚠️ [Gemini API Error] ${errMsg}` },
+                                    finish_reason: null
+                                }]
+                            });
                         }
                         break;
 
