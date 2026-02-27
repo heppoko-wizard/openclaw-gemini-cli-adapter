@@ -25,34 +25,67 @@ jobs:
         run: |
           PROJECT_NAME="openclaw-gemini-cli-adapter"
           TAG_NAME="${GITHUB_REF#refs/tags/}"
-          mkdir -p dist
-
-          # リリースに含めるファイルを選别（生成物・ログ・開発用ドキュメントは除外）
-          zip -r dist/${PROJECT_NAME}-${TAG_NAME}-linux.zip \
-            src/ scripts/ \
-            adapter.js mcp-server.mjs setup.js \
-            start.sh install.sh \
-            package.json \
-            README.md README_JA.md README_ZH.md \
-            LICENSE \
-            -x "*.log" -x "logs/*" -x "memory*" -x "*.pid"
-
-          # macOS 向けは同一内容（OS固有ビルド不要のためコピー）
-          cp dist/${PROJECT_NAME}-${TAG_NAME}-linux.zip \
-             dist/${PROJECT_NAME}-${TAG_NAME}-macos.zip
+          
+          # 制作用ディレクトリ
+          STAGE_DIR="dist/stage_linux"
+          mkdir -p $STAGE_DIR/openclaw/$PROJECT_NAME
+          
+          # 1. ルートレベルのファイル
+          cp setup.js install.sh $STAGE_DIR/openclaw/ 2>/dev/null || true
+          cp README*.md LICENSE $STAGE_DIR/openclaw/ 2>/dev/null || true
+          
+          # 2. アダプタ本体のファイル
+          cp -r src scripts public adapter.js mcp-server.mjs package.json start.sh installer-gui.js $STAGE_DIR/openclaw/$PROJECT_NAME/ 2>/dev/null || true
+          
+          # クリーンな.gemini設定を同梱
+          mkdir -p $STAGE_DIR/openclaw/$PROJECT_NAME/src/.gemini
+          echo '{"model":{"name":"auto-gemini-3"}}' > $STAGE_DIR/openclaw/$PROJECT_NAME/src/.gemini/settings.json
+          
+          # 不要ファイル・センシティブなデータを削除
+          find $STAGE_DIR -name "*.log" -delete 2>/dev/null || true
+          find $STAGE_DIR -name "oauth_creds.json" -delete 2>/dev/null || true
+          find $STAGE_DIR -name "google_accounts.json" -delete 2>/dev/null || true
+          find $STAGE_DIR -name "memory*" -delete 2>/dev/null || true
+          
+          # ZIP圧縮
+          cd $STAGE_DIR
+          zip -qr ../${PROJECT_NAME}-${TAG_NAME}-linux.zip openclaw/
+          cd ../..
+          
+          # macOS用は同一内容をコピー
+          cp dist/${PROJECT_NAME}-${TAG_NAME}-linux.zip dist/${PROJECT_NAME}-${TAG_NAME}-macos.zip
 
       - name: Package for Windows
         run: |
           PROJECT_NAME="openclaw-gemini-cli-adapter"
           TAG_NAME="${GITHUB_REF#refs/tags/}"
-          zip -r dist/${PROJECT_NAME}-${TAG_NAME}-windows.zip \
-            src/ scripts/ \
-            adapter.js mcp-server.mjs setup.js \
-            install.bat \
-            package.json \
-            README.md README_JA.md README_ZH.md \
-            LICENSE \
-            -x "*.log" -x "logs/*" -x "memory*" -x "*.pid"
+          
+          # 制作用ディレクトリ
+          STAGE_DIR="dist/stage_win"
+          mkdir -p $STAGE_DIR/openclaw/$PROJECT_NAME
+          
+          # 1. ルートレベルのファイル (Windows用は install.bat)
+          cp setup.js install.bat $STAGE_DIR/openclaw/ 2>/dev/null || true
+          cp README*.md LICENSE $STAGE_DIR/openclaw/ 2>/dev/null || true
+          
+          # 2. アダプタ本体のファイル (Windows用は start.sh を除外)
+          cp -r src scripts public adapter.js mcp-server.mjs package.json installer-gui.js $STAGE_DIR/openclaw/$PROJECT_NAME/ 2>/dev/null || true
+          
+          # クリーンな.gemini設定を同梱
+          mkdir -p $STAGE_DIR/openclaw/$PROJECT_NAME/src/.gemini
+          echo '{"model":{"name":"auto-gemini-3"}}' > $STAGE_DIR/openclaw/$PROJECT_NAME/src/.gemini/settings.json
+          
+          # 不要ファイル・センシティブなデータを削除
+          find $STAGE_DIR -name "*.log" -delete 2>/dev/null || true
+          find $STAGE_DIR -name "oauth_creds.json" -delete 2>/dev/null || true
+          find $STAGE_DIR -name "google_accounts.json" -delete 2>/dev/null || true
+          find $STAGE_DIR -name "memory*" -delete 2>/dev/null || true
+          
+          # ZIP圧縮
+          cd $STAGE_DIR
+          zip -qr ../${PROJECT_NAME}-${TAG_NAME}-windows.zip openclaw/
+          cd ../..
+
 
       - name: Release
         uses: softprops/action-gh-release@v2
