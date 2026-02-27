@@ -482,6 +482,13 @@ const server = http.createServer((req, res) => {
     // --- API: Exit ---
     if (req.method === 'POST' && url.pathname === '/api/exit') {
         sendJson(200, { success: true });
+        console.log('\n============================================');
+        console.log('🎉 セットアップが完了しました！');
+        console.log('ブラウザのタブを閉じて、このターミナルを終了してください。');
+        console.log('次のステップ:');
+        console.log('  1. ./openclaw-gemini-cli-adapter/start.sh でアダプタ起動');
+        console.log('  2. npm run start で OpenClaw 起動');
+        console.log('============================================\n');
         setTimeout(() => process.exit(0), 1000);
         return;
     }
