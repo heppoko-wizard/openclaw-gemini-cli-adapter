@@ -587,14 +587,35 @@ async function main() {
     // 4. Gemini CLI Authentication
     console.log("[4/4] " + L.checkAuth);
     // Gemini CLI places credentials inside a '.gemini' subfolder of GEMINI_CLI_HOME
-    const credsPath1 = path.join(GEMINI_CREDS_DIR, ".gemini", "oauth_creds.json");
-    const credsPath2 = path.join(GEMINI_CREDS_DIR, ".gemini", "google_accounts.json");
-    
-    // Also check the old paths just in case Gemini CLI behavior changes
-    const credsPath1Alt = path.join(GEMINI_CREDS_DIR, "oauth_creds.json");
-    const credsPath2Alt = path.join(GEMINI_CREDS_DIR, "google_accounts.json");
+    const credsPaths = [
+        path.join(GEMINI_CREDS_DIR, ".gemini", "oauth_creds.json"),
+        path.join(GEMINI_CREDS_DIR, ".gemini", "google_accounts.json"),
+        path.join(GEMINI_CREDS_DIR, "oauth_creds.json"),
+        path.join(GEMINI_CREDS_DIR, "google_accounts.json"),
+    ];
 
-    if (!fs.existsSync(credsPath1) && !fs.existsSync(credsPath2) && !fs.existsSync(credsPath1Alt) && !fs.existsSync(credsPath2Alt)) {
+    // Check if credentials actually contain valid auth data, not just empty templates.
+    // Gemini CLI creates google_accounts.json with {"active": null} BEFORE auth completes,
+    // so we must inspect the file contents, not just check for file existence.
+    function hasValidCredentials() {
+        for (const p of credsPaths) {
+            if (!fs.existsSync(p)) continue;
+            try {
+                const raw = fs.readFileSync(p, 'utf-8').trim();
+                if (!raw || raw.length < 10) continue; // too small to be valid
+                const data = JSON.parse(raw);
+                // oauth_creds.json: should have a refresh_token or access_token
+                if (data.refresh_token || data.access_token) return true;
+                // google_accounts.json: 'active' must not be null
+                if (data.active !== undefined && data.active !== null) return true;
+            } catch (e) {
+                // Not valid JSON yet, skip
+            }
+        }
+        return false;
+    }
+
+    if (!hasValidCredentials()) {
         // Show notice about dedicated/isolated Gemini CLI before prompting
         console.log(L.authNotice);
         const doLogin = await question(L.authNeeded);
@@ -615,7 +636,6 @@ async function main() {
                 
                 console.log(L.authTuiStart);
                 console.log(L.authTuiTip);
-                console.log("When authentication is successful, this installer will detect it and proceed automatically!");
                 console.log("-----------------------------------------");
                 
                 const child = spawn(cmdParts[0], cmdParts.slice(1).concat(['login']), {
@@ -626,28 +646,28 @@ async function main() {
 
                 let killed = false;
 
-                // Poll for the credentials file. If it exists, login succeeded.
+                // Poll for VALID credentials (file must contain actual auth tokens).
                 const checkInterval = setInterval(() => {
-                    if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2) || fs.existsSync(credsPath1Alt) || fs.existsSync(credsPath2Alt)) {
+                    if (hasValidCredentials()) {
                         clearInterval(checkInterval);
                         if (!killed) {
                             killed = true;
                             console.log("\n-----------------------------------------");
-                            console.log("Auth credentials detected! Auto-exiting Gemini CLI...");
+                            console.log("✓ Auth credentials verified! Auto-exiting Gemini CLI...");
                             setTimeout(() => {
                                 try { child.kill('SIGKILL'); } catch (e) {}
                                 resolve();
-                            }, 500); // Give CLI a moment to write everything safely
+                            }, 1500); // Give CLI a moment to finish writing
                         }
                     }
-                }, 1000);
+                }, 2000);
 
                 child.on('close', () => {
                     clearInterval(checkInterval);
                     if (!killed) resolve();
                 });
             });
-            if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2) || fs.existsSync(credsPath1Alt) || fs.existsSync(credsPath2Alt)) {
+            if (hasValidCredentials()) {
                 console.log(L.authSuccess + "\n");
             } else {
                 console.log(L.authMissingTip + "\n");
@@ -658,6 +678,7 @@ async function main() {
     } else {
         console.log(L.authSuccess + " (Skipped / 読込済)\n");
     }
+
 
 
 
