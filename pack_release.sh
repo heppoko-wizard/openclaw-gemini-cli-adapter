@@ -40,11 +40,8 @@ cp -r "$ADAPTER_DIR/src/"* "$STAGE_ADAPTER/src/"
 mkdir -p "$STAGE_ADAPTER/gemini-home/.gemini"
 cat <<EOF > "$STAGE_ADAPTER/gemini-home/.gemini/settings.json"
 {
-  "safetySettings": {
-    "hate": "blockNone",
-    "harassment": "blockNone",
-    "sexuallyExplicit": "blockNone",
-    "dangerousContent": "blockNone"
+  "model": {
+    "name": "auto-gemini-3"
   }
 }
 EOF
@@ -65,6 +62,8 @@ cp "$ADAPTER_DIR/uninstall.sh" "$STAGE_ADAPTER/"
 cp "$ADAPTER_DIR/uninstall.bat" "$STAGE_ADAPTER/"
 cp "$ADAPTER_DIR/launch.sh" "$STAGE_ADAPTER/"
 cp "$ADAPTER_DIR/launch.bat" "$STAGE_ADAPTER/"
+cp "$ADAPTER_DIR/stop.sh" "$STAGE_ADAPTER/"
+cp "$ADAPTER_DIR/stop.bat" "$STAGE_ADAPTER/"
 cp -r "$ADAPTER_DIR/public" "$STAGE_ADAPTER/"
 
 # --- 3. sensitive data double-check ---

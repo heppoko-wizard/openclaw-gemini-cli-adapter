@@ -423,6 +423,7 @@
 - **`__dirname` ベースのパス解決バグを修正**: `src/runner-pool.js` が `src/` を起点として `src/gemini-home` を参照してしまうバグを修正。`path.resolve(__dirname, '..')` によりアダプタルートを確実に取得するよう修正。
 - **Gateway 起動コマンドの修正**: `launch.sh`・`launch.bat` が `npm run start`（ヘルプ画面表示のコマンド）を呼んでいたためGatewayサーバーが立ち上がらなかった不具合を特定。`npm run openclaw -- gateway` に修正し、ポート18789が開くまで最大60秒ポーリングで待機してからダッシュボードURLを開く起動ループを追加。
 - **`models.primary` 自動クリーンアップのロジック強化**: `update_models.mjs` が `config.models.primary` の存在を `in` 演算子で確実にチェックして強制削除するよう修正。これにより OpenClaw 2026.2.26 以降で発生する "Unrecognized key: primary" エラーを起動のたびに自動解消できるようになった。
+- **ユーティリティスクリプトの拡充**: 一括キルスクリプト (`stop.sh`, `stop.bat`) を新規作成。ポート3972, 18789, 19878 および残存 Runner を一掃できるようにした。また `relogin.js`, `uninstall.sh`, `package.json` などを正式にリポジトリへ追加。
 
 ### 発見・学んだこと
 - **Gemini CLI の GEMINI_CLI_HOME 仕様**: `GEMINI_CLI_HOME` に指定したディレクトリの「中」に Gemini CLI が自動的に `.gemini` サブフォルダを作成する。つまり `GEMINI_CLI_HOME=src/.gemini` と設定すると `src/.gemini/.gemini/` という二重ネストが必然的に生まれる。隔離の起点ディレクトリと、資格情報の実際の格納先（`起点/.gemini/`）を明確に区別して設計しなければならない。
@@ -435,7 +436,7 @@
 
 ### 変更したファイル
 - `start.sh` — GEMINI_CLI_HOME を `src/.gemini` から `gemini-home` へ修正
-- `pack_release.sh` — settings.json の初期作成先を `gemini-home/.gemini` に変更
+- `pack_release.sh` — 成果物管理に `stop.sh`, `relogin.sh` 等のユーティリティを追加
 - `install-adapter.sh` — 案内メッセージ中のパスを修正（JA/ZH/EN全言語）
 - `installer-gui.js` — `GEMINI_CREDS_DIR` を `gemini-home` へ修正
 - `relogin.js` — 同上
@@ -444,6 +445,7 @@
 - `scripts/update_models.mjs` — `models.primary` の強制削除ロジックを `in` 演算子で堅牢化
 - `setup.js` — 資格情報チェックのパスを `.gemini` サブディレクトリに統一
 - `launch.sh`, `launch.bat` — Gateway起動コマンドを正しいサブコマンドに修正、起動待機ループを追加
+- `stop.sh`, `stop.bat` — 一括終了スクリプトを新規作成
 
 ### 残った課題・TODO
 - [ ] 現実環境でのエンドツーエンドのクリーンインストールテスト
@@ -452,3 +454,5 @@
 
 ### コミット
 - `22dfea63` — fix(paths): resolve nested .gemini dir bug and unify all paths to gemini-home
+- `333767ae` — docs(devlog): add session 21 entries for path unification and gateway fix
+- `507204f2` — feat(scripts): add stop.sh and stop.bat to manage process lifecycle
