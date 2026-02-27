@@ -168,12 +168,33 @@ const server = http.createServer((req, res) => {
                 });
             };
 
-            // Step A: Package installation
-            if (!fs.existsSync(path.join(PLUGIN_DIR, 'node_modules'))) {
-                const depOk = await runCmd('npm install', PLUGIN_DIR, "Installing dependencies");
+            // Step A: OpenClaw installation if missing
+            const packageJsonPath = path.join(OPENCLAW_ROOT, "package.json");
+            if (!fs.existsSync(packageJsonPath)) {
+                broadcastLog("OpenClaw base not found. Downloading OpenClaw...", 'step_start');
+                
+                // git init -> remote add -> fetch -> reset is safe for non-empty directories
+                const fetchCmd = 'git init && git remote add origin https://github.com/heppokofrontend/openclaw.git && git fetch origin master && git reset --hard origin/master';
+                
+                const cloneOk = await runCmd(fetchCmd, OPENCLAW_ROOT, "Downloading OpenClaw");
+                
+                if (!cloneOk) {
+                     success = false;
+                     broadcastLog("Failed to download OpenClaw. Please move this folder into an existing OpenClaw installation.", 'step_error');
+                }
+                
+                if (success) {
+                    const rootDepOk = await runCmd('npm install', OPENCLAW_ROOT, "Installing OpenClaw dependencies");
+                    if (!rootDepOk) success = false;
+                }
+            }
+
+            // Step B: Adapter Package installation
+            if (success && !fs.existsSync(path.join(PLUGIN_DIR, 'node_modules'))) {
+                const depOk = await runCmd('npm install', PLUGIN_DIR, "Installing dependencies for adapter");
                 if (!depOk) success = false;
-            } else {
-                broadcastLog("Dependencies already installed, skipping npm install.", 'log');
+            } else if (success) {
+                broadcastLog("Adapter dependencies already installed, skipping npm install.", 'log');
             }
 
             // Step B: Models sync
