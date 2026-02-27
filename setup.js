@@ -565,10 +565,15 @@ async function main() {
 
     // 4. Gemini CLI Authentication
     console.log("[4/4] " + L.checkAuth);
-    const credsPath1 = path.join(GEMINI_CREDS_DIR, "oauth_creds.json");
-    const credsPath2 = path.join(GEMINI_CREDS_DIR, "google_accounts.json");
+    // Gemini CLI places credentials inside a '.gemini' subfolder of GEMINI_CLI_HOME
+    const credsPath1 = path.join(GEMINI_CREDS_DIR, ".gemini", "oauth_creds.json");
+    const credsPath2 = path.join(GEMINI_CREDS_DIR, ".gemini", "google_accounts.json");
     
-    if (!fs.existsSync(credsPath1) && !fs.existsSync(credsPath2)) {
+    // Also check the old paths just in case Gemini CLI behavior changes
+    const credsPath1Alt = path.join(GEMINI_CREDS_DIR, "oauth_creds.json");
+    const credsPath2Alt = path.join(GEMINI_CREDS_DIR, "google_accounts.json");
+
+    if (!fs.existsSync(credsPath1) && !fs.existsSync(credsPath2) && !fs.existsSync(credsPath1Alt) && !fs.existsSync(credsPath2Alt)) {
         // Show notice about dedicated/isolated Gemini CLI before prompting
         console.log(L.authNotice);
         const doLogin = await question(L.authNeeded);
@@ -580,12 +585,9 @@ async function main() {
             const commandToRun = fs.existsSync(localGeminiPath) ? localGeminiPath : "npx gemini";
             
             // IMPORTANT: Close readline BEFORE running gemini login.
-            // If rl is open, it holds stdin and the gemini login subprocess
-            // cannot receive the auth code pasted by the user.
             rl.close();
 
             // Open browser automatically if possible.
-            // We've already closed readline above, so the terminal is ready for the auth code.
             await new Promise((resolve) => {
                 const { spawn } = require('child_process');
                 const cmdParts = commandToRun.split(' ');
@@ -601,28 +603,30 @@ async function main() {
                     stdio: 'inherit'
                 });
 
+                let killed = false;
+
                 // Poll for the credentials file. If it exists, login succeeded.
                 const checkInterval = setInterval(() => {
-                    if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2)) {
+                    if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2) || fs.existsSync(credsPath1Alt) || fs.existsSync(credsPath2Alt)) {
                         clearInterval(checkInterval);
-                        console.log("\n-----------------------------------------");
-                        console.log("Auth credentials detected. Auto-exiting Gemini CLI...");
-                        setTimeout(() => {
-                            child.kill('SIGINT');
+                        if (!killed) {
+                            killed = true;
+                            console.log("\n-----------------------------------------");
+                            console.log("Auth credentials detected! Auto-exiting Gemini CLI...");
                             setTimeout(() => {
                                 try { child.kill('SIGKILL'); } catch (e) {}
-                            }, 1000);
-                            resolve();
-                        }, 500); // Give CLI a moment to write everything safely
+                                resolve();
+                            }, 500); // Give CLI a moment to write everything safely
+                        }
                     }
                 }, 1000);
 
                 child.on('close', () => {
                     clearInterval(checkInterval);
-                    resolve();
+                    if (!killed) resolve();
                 });
             });
-            if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2)) {
+            if (fs.existsSync(credsPath1) || fs.existsSync(credsPath2) || fs.existsSync(credsPath1Alt) || fs.existsSync(credsPath2Alt)) {
                 console.log(L.authSuccess + "\n");
             } else {
                 console.log(L.authMissingTip + "\n");
@@ -633,6 +637,7 @@ async function main() {
     } else {
         console.log(L.authSuccess + " (Skipped / 読込済)\n");
     }
+
 
 
     console.log("=================================================");
