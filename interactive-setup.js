@@ -492,19 +492,14 @@ Comment=Starts OpenClaw Gateway and Gemini CLI Adapter
     const launchIdx = await select([L().launch_yes, L().launch_no], L().launch_q);
 
     if (launchIdx === 0) {
-        console.log(`\n  ${C.magenta(L().launching)}`);
+        console.log(`\n  ${C.magenta(L().launching)}\n`);
 
         const startScript = process.platform === 'win32' ? 'launch.bat' : './launch.sh';
         const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash';
         const shellArg = process.platform === 'win32' ? '/c' : '-c';
-        spawn(shell, [shellArg, startScript], { cwd: PLUGIN_DIR, detached: true, stdio: 'ignore' }).unref();
-        spawn('npm', ['start'], { cwd: OPENCLAW_ROOT, detached: true, stdio: 'ignore', shell: true }).unref();
-
-        // ブラウザを開く
-        const openCmd = process.platform === 'win32' ? 'start' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
-        setTimeout(() => {
-            spawn(openCmd, ['"http://127.0.0.1:18789/chat?session=agent%3Amain%3Amain"'], { detached: true, stdio: 'ignore', shell: true }).unref();
-        }, 3000);
+        
+        // launch.sh / launch.bat が Gateway 起動を待ち、dashboard コマンドで安全にブラウザを開く
+        spawnSync(shell, [shellArg, startScript], { cwd: PLUGIN_DIR, stdio: 'inherit' });
     }
 
     console.log(`\n  ${C.bold(C.green(L().done))}\n`);
