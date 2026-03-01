@@ -35,16 +35,16 @@ graph TD
 |------|------|------|
 | **設定ファイル** | `~/.openclaw/openclaw.json` | プロバイダ設定およびUIに表示するGeminiモデル一覧（唯一の真実源） |
 | **マッピング** | `~/.openclaw/gemini-session-map.json` | OpenClawのKeyとGemini CLIのUUIDを紐付け |
-| **履歴データ** | `~/.openclaw/gemini-sessions/<session_key>/.gemini/tmp/openclaw-gemini-cli-adapter/chats/` | Geminiコマンドの作業ディレクトリ（内部セッション状態など） |
-| **起動スクリプト** | `start.sh` | アダプタサーバーをバックグラウンドで起動 |
-| **同期スクリプト** | `scripts/update_models.js` | Gemini CLIからモデル一覧を取得し、`openclaw.json` に同期する |
+| **履歴データ** | `gemini-home/.gemini/tmp/openclaw-gemini-cli-adapter/chats/` | Geminiコマンドの隔離された作業ディレクトリ（内部セッション状態など） |
+| **起動スクリプト** | `launch.sh` / `start.sh` | Gateway連携の一括起動スクリプト / アダプタ単体の起動スクリプト |
+| **同期スクリプト** | `scripts/update_models.mjs` | Gemini CLIからモデル一覧を取得し、`openclaw.json` に同期する |
 | **ログ** | `logs/adapter.log` | アダプタ自身の動作ログ（モデル選択やプロファイリング情報、重要） |
 | **ログ** | `logs/adapter_last_req.json` | 最後に受け取ったHTTPリクエストの生データ（デバッグ用） |
 | **ログ** | `openclaw-gateway.log` | OpenClaw側（Gateway）全体の通信ログ |
 
 ## 4. データフロー（モデル選択とコンテキストの伝播）
 
-1. **モデル同期**: Gateway起動前に `update_models.js` が走り、最新のGeminiモデル一覧を `openclaw.json` に反映。
+1. **モデル同期**: Gateway起動前に `update_models.mjs` が走り、最新のGeminiモデル一覧を `openclaw.json` に反映。
 2. **リクエスト受信**: クライアント指示でOpenClawが `messages`（履歴含む）と指定された `model` 名を構築し、AdapterへPOST。
 3. **パースとスタンバイ**: Adapter (`server.js`) はメッセージを抽出し、`messages` 配列と `model` 名をRunnerPoolへ渡す。
 4. **推論実行**: RunnerPool は待機中のRunner WorkerへIPC（プロセス間通信）で `resumedSessionData`（履歴構造体全体）を送信。CLIプロセス内部の変数にコンテキストが直接注入される。

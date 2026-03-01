@@ -3,23 +3,39 @@
 ## 1. 通常運用
 
 ### 起動手順
-Gemini CLI Adapter と OpenClaw Gateway の2つのプロセスを起動する必要があります。
+
+起動には2つの方法があります。基本的には一括起動が推奨されます。
+
+#### A. 一括起動 (推奨)
+Gemini CLI Adapter と OpenClaw Gateway、そしてコントロールダッシュボードを全て自動で起動します。
 
 ```bash
-# アダプタサーバーの起動 (Port: 3972)
 cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
-nohup ./start.sh > logs/adapter-nohup.log 2>&1 &
+# Windows の場合は launch.bat を実行
+./launch.sh
+```
 
-# OpenClaw Gatewayの起動 (Port: 18789)
+#### B. 個別起動 (手動運用時)
+ログをターミナルで直接確認したい場合などに使用します。
+
+```bash
+# ターミナル1: アダプタサーバーの起動 (Port: 3972)
+cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
+./start.sh
+
+# ターミナル2: OpenClaw Gatewayの起動 (Port: 18789)
 cd /home/heppo/ドキュメント/DEV/openclaw
-nohup node openclaw.mjs gateway --port 18789 > openclaw-gateway.log 2>&1 &
+npm run openclaw -- gateway
 ```
 
 ### 停止手順
-ポート番号を指定してプロセスをキルします。
+
+専用の停止スクリプトを使用して、関連する全てのプロセス（Adapter, Gateway, コントロールダッシュボード, Gemini Runner）を一括で安全に終了します。
 
 ```bash
-kill $(lsof -t -i :3972) $(lsof -t -i :18789)
+cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
+# Windows の場合は stop.bat を実行
+./stop.sh
 ```
 
 ## 2. 障害対応
