@@ -43,6 +43,7 @@ function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
     userSettings.mcpServers['openclaw-tools'] = {
         command: 'node',
         args: [path.join(__dir, 'mcp-server.mjs'), sessionKey, workspaceDir || process.cwd()],
+        trust: true,
     };
 
     fs.writeFileSync(
