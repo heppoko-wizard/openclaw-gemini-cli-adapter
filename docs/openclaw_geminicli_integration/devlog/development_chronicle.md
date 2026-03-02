@@ -526,3 +526,7 @@
 ### 変更したファイル
 - `interactive-setup.js` — `settings.json` 生成ロジックにフル権限設定（YOLO, などのプロパティ）と `os.homedir()` による動的パスを追加。
 - `pack_release.sh` — デフォルト `settings.json` の強化とハードコードの削除、`release` フォルダへの出力先変更。
+
+### コミット
+- `4fc5c7e1` — feat(setup): enforce YOLO mode and dynamic context for full authority
+- `479a9a54` — feat: complete setting overhaul and adapter synchronization
