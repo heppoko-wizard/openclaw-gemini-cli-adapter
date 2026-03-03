@@ -588,5 +588,7 @@
 - `interactive-setup.js` — 既存の `gemini -login` 呼び出しプロセスを削除し、上記スクリプトへの呼び出しに差し替え
 
 ### コミット
+- `6ab26ff1` — feat(setup): update auth guide text and display fallback URL
+- `f4c1e2a6` — fix(setup): use GEMINI_CLI_HOME for auth credential storage
 - `04241303` — feat(setup): replace gemini -login with headless PKCE auth script
 - `ac9804b3` — docs: establish programmatic auth protocol for Gemini CLI
