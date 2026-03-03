@@ -565,3 +565,28 @@
 - `8f8c2e5c` — refactor(workspace): move credentials to .env, remove hardcoded secrets from config.ts
 - `4e94c332` — feat(workspace-ext): add enhanced-google-workspace extension to repository
 - `4d7dbcec` — fix(setup): dynamically rewrite extension-enablement.json with current user's home dir
+
+---
+
+## セッション 26: プログラム制御による Gemini CLI 認証の開拓
+
+### やったこと
+
+- **認証URLのプログラム生成**: Gemini CLI のコアコード (`dist/src/code_assist/oauth2.js`) を解析し、公式クレデンシャルを利用して `gemini -login` なしで認証URLを取得する手法を解明。
+- **PKCE (Code Challenge) の再現**: 初期テストで `redirect_uri_mismatch` エラーが発生した原因を調査し、Google の「コード表示ページ (`https://codeassist.google.com/authcode`)」を利用する際は PKCE セキュリティハッシュ (`code_challenge` / `code_verifier`) が必須であることを特定。これを再現する実装を追加した。
+- **自動化された認証スクリプトの実装**: `scripts/setup-gemini-auth.js` を新規作成。ローカルウェブサーバー (`http://127.0.0.1:port`) を動的に立ち上げ、ブラウザでの認証完了リダイレクトを直接受け取る「パターンA」の認証方式をエンドツーエンドで実装。
+- **セットアップフローの差し替え**: `interactive-setup.js` における「既存の `gemini` コマンドを spawn() して出力を監視し、`y` を自動送信し強制終了する」というハック的な認証プロセスを、すべて独自作成した `setup-gemini-auth.js` のクリーンなホストプロセス呼び出しに置き換えた。
+
+### 発見・学んだこと
+- **OAuth アプリケーションの身分証明**: Gemini CLI のソースコードに埋め込まれている `CLIENT_ID` および `CLIENT_SECRET` は、「デスクトップアプリ」としての恒久的な識別子として機能する。これを再利用することで、Google 側からは正規のリクエストとして受理される。
+- **バックグラウンドプロセスの完全排除**: 新しい方式では不要な CLI ツールUI（Ink等の TUI）が起動しないため、ターミナルのバッファ破損やプロセスハングのリスクが根本から消滅した。
+
+### 変更したファイル
+- `docs/openclaw_geminicli_integration/auth_protocol_guide.md` — 認証URL生成プロセスをまとめた新設ガイドドキュメント
+- `scripts/get-gemini-auth-url.js` — 動作検証・学習用の URL 出力スクリプト（PKCE対応版）
+- `scripts/setup-gemini-auth.js` — ローカルサーバーでの自動リダイレクトを用いた完全な自動ログインスクリプト
+- `interactive-setup.js` — 既存の `gemini -login` 呼び出しプロセスを削除し、上記スクリプトへの呼び出しに差し替え
+
+### コミット
+- `04241303` — feat(setup): replace gemini -login with headless PKCE auth script
+- `ac9804b3` — docs: establish programmatic auth protocol for Gemini CLI
