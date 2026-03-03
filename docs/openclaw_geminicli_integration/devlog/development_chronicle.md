@@ -530,3 +530,38 @@
 ### コミット
 - `4fc5c7e1` — feat(setup): enforce YOLO mode and dynamic context for full authority
 - `479a9a54` — feat: complete setting overhaul and adapter synchronization
+
+---
+
+# 2026-03-04 開発ログ
+
+## セッション 25: enhanced-google-workspace 拡張機能の統合
+
+### やったこと
+
+- **拡張機能のリポジトリ統合**: `gemini-home/extensions/enhanced-google-workspace/` は独自の `.git` を持つ別リポジトリだったが、ユーザーの方針に従い `.git` を削除して親リポジトリに取り込んだ。シークレットファイル（`.env`、OAuthトークン、マスターキー）は `.gitignore` で確実に除外。
+- **ts-node 方式への移行（ビルドレス化）**: `scripts/auth-setup.js` が `dist/auth/AuthManager` を参照していたが `dist/` が存在せずエラーとなっていた。開発中は ts-node でTypeScriptソースを直接実行するよう書き換え、ビルドなしで動作するようにした。`gemini-extension.json` のMCPサーバー起動コマンドも `npm run start` から `npx ts-node` 直接実行に変更した。
+- **クレデンシャルの `.env` 化**: `workspace-server/src/utils/config.ts` にハードコードされていた `CLIENT_ID` と `CLIENT_SECRET` を削除し、`.env` ファイルから Node.js 組み込みの `process.loadEnvFile()` で読み込む方式に変更。`WORKSPACE_CLIENT_SECRET` が空の場合は既存の Cloud Function OAuth フローに自動フォールバックする仕組みも活用。
+- **セットアップフローへの統合**: `interactive-setup.js` に Google Workspace OAuth 認証ステップを追加。Gemini CLI 認証の直後に「Workspace 連携を有効にしますか？」を任意で選択できる。選んだ場合はブラウザが自動で開き、認証完了まで待機する。
+- **extension-enablement.json の動的書き換え**: Gemini CLI の公式セキュリティポリシーファイル `extension-enablement.json` にハードコードされていた `/home/heppo/*` を、`interactive-setup.js` がセットアップ時に `os.homedir()` で動的に書き換えるよう修正。Windows のパス区切り文字（`\` → `/`）も考慮した全OS対応実装。
+- **配布向けガイドの作成**: `BUNDLE_GUIDE.md` および `.env.example` を新規作成。将来ビルドして配布する際の手順（esbuild設定の変更点、`gemini-extension.json` の書き換え箇所、keytar の扱いなど）を明記した。
+
+### 発見・学んだこと
+- **extension-enablement.json は Gemini CLI 公式仕様**: `node_modules/@google/gemini-cli/dist/src/config/extensions/extensionEnablement.js` が直接参照している Gemini CLI コアのセキュリティファイル。overrides に記載されたパスパターンに一致するパスのみ、拡張機能の操作が許可される。ポータブルなインストーラーには必須の書き換え対象。
+- **git の negation パターン制約**: 親ディレクトリが `.gitignore` で無視されると、子ディレクトリの negation (`!subdir/file`) は機能しない。サブリポジトリ（独自 `.git` 保持）もこれと同様に親に取り込めない。フォルダを直接追跡するには `.git` 削除が最もシンプル。
+- **process.loadEnvFile() はビルドツール不要**: Node.js v20.6 以降に組み込まれた機能で `dotenv` パッケージなしに `.env` を読み込める。TypeScript からは `(process as any).loadEnvFile(path)` で呼び出せる。
+
+### 変更したファイル
+- `interactive-setup.js` — Workspace 認証ステップの追加、`extension-enablement.json` 動的書き換えロジックの追加
+- `gemini-home/extensions/enhanced-google-workspace/scripts/auth-setup.js` — ts-node 方式に書き換え
+- `gemini-home/extensions/enhanced-google-workspace/gemini-extension.json` — MCPサーバー起動コマンドを ts-node 直接実行に変更
+- `gemini-home/extensions/enhanced-google-workspace/workspace-server/src/utils/config.ts` — ハードコード削除・`.env` 読み込み方式に変更
+- `gemini-home/extensions/enhanced-google-workspace/BUNDLE_GUIDE.md` — 新規作成（配布向けビルド手順ドキュメント）
+- `gemini-home/extensions/enhanced-google-workspace/.env.example` — 新規作成（環境変数テンプレート）
+- `.gitignore` — 拡張機能ソースコードを追跡対象に含める設定に変更
+
+### コミット
+- `5bdb449e` — feat(setup): integrate Google Workspace extension auth into setup flow
+- `8f8c2e5c` — refactor(workspace): move credentials to .env, remove hardcoded secrets from config.ts
+- `4e94c332` — feat(workspace-ext): add enhanced-google-workspace extension to repository
+- `4d7dbcec` — fix(setup): dynamically rewrite extension-enablement.json with current user's home dir
