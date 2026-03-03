@@ -1,0 +1,13 @@
+{
+  "name": "enhanced-google-workspace",
+  "version": "1.0.0",
+  "description": "Google Workspace (Gmail, Calendar, Tasks, Contacts) integration for Gemini CLI - Development Mode",
+  "contextFileName": "workspace-server/WORKSPACE-Context.md",
+  "mcpServers": {
+    "google-workspace": {
+      "command": "npx",
+      "args": ["ts-node", "--project", "${extensionPath}/workspace-server/tsconfig.json", "--transpile-only", "${extensionPath}/workspace-server/src/index.ts"],
+      "cwd": "${extensionPath}/workspace-server"
+    }
+  }
+}
