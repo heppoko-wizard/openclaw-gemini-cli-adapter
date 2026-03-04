@@ -500,7 +500,7 @@ async function main() {
 
             try {
                 await new Promise((resolve) => {
-                    const child = spawn('node', [WORKSPACE_AUTH_SCRIPT], {
+                    const child = spawn('node', [WORKSPACE_AUTH_SCRIPT, '--force'], {
                         cwd: WORKSPACE_EXT_DIR,
                         stdio: ['pipe', 'inherit', 'pipe'],
                         shell: false,

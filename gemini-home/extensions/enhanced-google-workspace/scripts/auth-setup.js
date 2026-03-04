@@ -38,8 +38,16 @@ const { OAuthCredentialStorage } = require('../workspace-server/src/auth/token-s
 
 async function runSetup() {
   const isCheckMode = process.argv.includes('--check');
+  const isForceMode = process.argv.includes('--force');
 
   try {
+    const authManager = new AuthManager(SCOPES);
+
+    if (isForceMode) {
+      console.log('強制再認証モード: 既存の認証情報をクリアしています...');
+      await authManager.clearAuth();
+    }
+
     const creds = await OAuthCredentialStorage.loadCredentials();
     const hasCreds = creds && creds.refresh_token;
 
@@ -49,14 +57,12 @@ async function runSetup() {
     }
 
     console.log('\n--- Google Workspace Setup ---');
-    if (hasCreds) {
+    if (hasCreds && !isForceMode) {
       console.log('✅ 既に認証済みです（OSキーチェーンからトークンを取得しました）。');
       process.exit(0);
     }
 
     console.log('認証を開始します。ブラウザを確認してください...');
-
-    const authManager = new AuthManager(SCOPES);
     await authManager.startAuthFlow();
     
     console.log('\n✅ セットアップが完了しました！');
