@@ -243,6 +243,22 @@ async function main() {
     console.log(`  ${hasAuth ? C.green(`${L().found} Gemini CLI 認証`) : C.red(`${L().not_found} Gemini CLI 認証`)}`);
     if (!hasAuth) checks.push({ key: 'auth', label: 'Gemini CLI 認証 (Google ログイン)' });
 
+    // Google Workspace 認証
+    const WORKSPACE_TOKEN_CHECK = path.join(PLUGIN_DIR, 'gemini-home', 'extensions', 'enhanced-google-workspace', 'gemini-cli-workspace-token.json');
+    const hasWorkspace = fs.existsSync(WORKSPACE_TOKEN_CHECK);
+    console.log(`  ${hasWorkspace ? C.green(`${L().found} Google Workspace 認証`) : C.yellow(`${L().not_found} Google Workspace 認証 ${lang === 'ja' ? '(任意・セットアップ中に設定可能)' : '(optional - configurable during setup)'}`)}`);
+
+    // Tailscale
+    const tsBin = spawnSync('tailscale', ['status'], { shell: true });
+    const hasTailscaleConnected = tsBin.status === 0;
+    const hasTailscaleInstalled = !!spawnSync('tailscale', ['version'], { shell: true }).stdout?.toString().trim();
+    const tsLabel = hasTailscaleConnected
+        ? `${L().found} Tailscale ${lang === 'ja' ? '(接続済み)' : '(connected)'}`
+        : hasTailscaleInstalled
+            ? `${L().found} Tailscale ${lang === 'ja' ? '(インストール済み / 未接続)' : '(installed / not connected)'}`
+            : `${L().not_found} Tailscale ${lang === 'ja' ? '(セットアップ中に自動インストール)' : '(will be auto-installed during setup)'}`;
+    console.log(`  ${hasTailscaleConnected ? C.green(tsLabel) : hasTailscaleInstalled ? C.yellow(tsLabel) : C.yellow(tsLabel)}`);
+
     console.log(`  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
 
     // ─── 3. 一括確認 (矢印) ───
