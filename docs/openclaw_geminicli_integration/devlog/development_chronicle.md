@@ -614,3 +614,21 @@
 ### コミット
 - `0c924a8f` — refactor(git): ensure all session and credential files are ignored
 - `2da50279` — fix(release): prevent README files from overwriting parent repo when extracted
+
+---
+
+## セッション 28: Tailscale リモートアクセスの自動セットアップ
+
+### やったこと
+
+- **Tailscale 自動インストール**: `interactive-setup.js` に Tailscale のセットアップを自動で行うステップを追加した。ユーザーへの質問（選択式）を廃止し、Linux 環境では常に自動で Tailscale をインストール・設定する仕様とした。
+- **認証フロー**: `tailscale up --reset` で認証URLを取得し、`xdg-open` でブラウザを自動オープンする。「ブラウザが自動で開くので、お使いの Google アカウントでログインしてください」という案内を表示した。
+- **スマートスキップ**: 既にTailscaleがインストール済み・ログイン済みの場合はそれぞれスキップし、重複操作を回避した。
+- **UFW ファイアウォール自動設定**: UFWが有効な環境では、`tailscale0` インターフェース経由でポート `18789`（OpenClaw Gateway）へのアクセスを自動許可するルールを追加した。
+- **アクセスURL表示**: セットアップ完了時に `http://100.x.x.x:18789` の形式でアクセスURLを表示し、スマホからすぐに接続可能な状態に。
+
+### 変更したファイル
+- `interactive-setup.js` — Tailscale 自動セットアップブロックの追加
+
+### コミット
+- `e0b63209` — feat(setup): add automatic Tailscale remote access setup
