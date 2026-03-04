@@ -120,6 +120,8 @@ const C = {
     yellow: (s) => `\x1b[33m${s}\x1b[0m`,
     magenta: (s) => `\x1b[35m${s}\x1b[0m`,
     dim: (s) => `\x1b[2m${s}\x1b[0m`,
+    gray: (s) => `\x1b[90m${s}\x1b[0m`,
+    white: (s) => `\x1b[37m${s}\x1b[0m`,
 };
 
 /**
@@ -455,7 +457,7 @@ async function main() {
     const hasWorkspaceAuth = fs.existsSync(WORKSPACE_TOKEN_FILE);
     const workspaceExtExists = fs.existsSync(WORKSPACE_AUTH_SCRIPT);
 
-    if (workspaceExtExists && !hasWorkspaceAuth) {
+    if (!hasWorkspaceAuth) {
         const wsAuthLabels = {
             ja: {
                 q: '📊 Google Workspace（Gmail / Drive / Calendar）との連携を有効にしますか？',
