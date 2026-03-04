@@ -492,22 +492,56 @@ async function main() {
                     const brewResult = spawnSync('brew', ['install', 'steipete/tap/gogcli'], { stdio: 'inherit', shell: true });
                     installed = brewResult.status === 0;
                 } else if (process.platform === 'linux') {
-                    // Linux: go install or release binary
-                    const goResult = spawnSync('go', ['install', 'github.com/steipete/gogcli@latest'], { stdio: 'inherit', shell: true });
-                    if (goResult.status === 0) {
-                        installed = true;
-                    } else {
-                        // go がない場合、GitHub Releases からバイナリをダウンロード
-                        const arch = process.arch === 'x64' ? 'amd64' : process.arch;
-                        const dlCmd = `curl -sL "https://github.com/steipete/gogcli/releases/latest/download/gogcli_linux_${arch}.tar.gz" | tar xz -C /usr/local/bin gog`;
-                        console.log(`  ${C.dim('go が見つからないため、バイナリを直接ダウンロードします...')}`);
-                        const dlResult = spawnSync('sh', ['-c', dlCmd], { stdio: 'inherit' });
-                        installed = dlResult.status === 0;
+                    // Linux: GitHub Releases APIからバージョン付きURLを取得してDL
+                    const arch = process.arch === 'x64' ? 'amd64' : 'arm64';
+                    console.log(`  ${C.dim('GitHub API からダウンロードURLを取得中...')}`);
+                    try {
+                        const releaseInfo = await new Promise((resolve, reject) => {
+                            https.get({
+                                hostname: 'api.github.com',
+                                path: '/repos/steipete/gogcli/releases/latest',
+                                headers: { 'User-Agent': 'openclaw-setup' }
+                            }, res => {
+                                let b = ''; res.on('data', c => b += c);
+                                res.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
+                            }).on('error', reject);
+                        });
+                        const asset = (releaseInfo.assets || []).find(a => a.name.includes(`linux_${arch}`) && a.name.endsWith('.tar.gz'));
+                        if (asset) {
+                            const dlCmd = `curl -fsSL "${asset.browser_download_url}" | tar xz -C /usr/local/bin gog`;
+                            console.log(`  ${C.dim(`ダウンロード: ${asset.name}`)}`);
+                            const dlResult = spawnSync('sudo', ['sh', '-c', dlCmd], { stdio: 'inherit' });
+                            installed = dlResult.status === 0;
+                        } else {
+                            console.log(`  ${C.yellow(`linux_${arch} 用のアセットが見つかりませんでした`)}`);
+                        }
+                    } catch (e) {
+                        console.log(`  ${C.yellow(`APIアクセス失敗: ${e.message}`)}`);
                     }
-                } else {
-                    // Windows: go install
-                    const goResult = spawnSync('go', ['install', 'github.com/steipete/gogcli@latest'], { stdio: 'inherit', shell: true });
-                    installed = goResult.status === 0;
+                } else if (process.platform === 'win32') {
+                    // Windows: GitHub Releases APIからzip取得
+                    const arch = process.arch === 'x64' ? 'amd64' : 'arm64';
+                    console.log(`  ${C.dim('GitHub API からダウンロードURLを取得中...')}`);
+                    try {
+                        const releaseInfo = await new Promise((resolve, reject) => {
+                            https.get({
+                                hostname: 'api.github.com',
+                                path: '/repos/steipete/gogcli/releases/latest',
+                                headers: { 'User-Agent': 'openclaw-setup' }
+                            }, res => {
+                                let b = ''; res.on('data', c => b += c);
+                                res.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
+                            }).on('error', reject);
+                        });
+                        const asset = (releaseInfo.assets || []).find(a => a.name.includes(`windows_${arch}`) && a.name.endsWith('.zip'));
+                        if (asset) {
+                            const tmpZip = path.join(os.tmpdir(), 'gogcli.zip');
+                            const dlResult = spawnSync('powershell', ['-Command', `Invoke-WebRequest -Uri "${asset.browser_download_url}" -OutFile "${tmpZip}"; Expand-Archive -Force "${tmpZip}" -DestinationPath "C:\\Windows\\System32"; Remove-Item "${tmpZip}"`], { stdio: 'inherit', shell: true });
+                            installed = dlResult.status === 0;
+                        }
+                    } catch (e) {
+                        console.log(`  ${C.yellow(`APIアクセス失敗: ${e.message}`)}`);
+                    }
                 }
 
                 if (!installed) {
@@ -519,9 +553,37 @@ async function main() {
             const gogVerify = spawnSync('gog', ['--version'], { shell: true });
             if (gogVerify.status === 0) {
                 console.log(`\n  ${C.cyan(GL.auth_start)}`);
+
+                // ★ 旧エクステンション等からのシークレット(credentials.json)引き継ぎ処理 ★
+                let secretFile = null;
+                const searchPaths = [
+                    path.join(GEMINI_CREDS_DIR, 'extensions', 'enhanced-google-workspace', 'credentials.json'),
+                    path.join(GEMINI_CREDS_DIR, 'extensions', 'credentials.json'),
+                    path.join(GEMINI_CREDS_DIR, 'gemini-sessions', 'default', '.gemini', 'oauth_creds.json'),
+                    path.join(GEMINI_CREDS_DIR, '.gemini', 'oauth_creds.json')
+                ];
+                for (const p of searchPaths) {
+                    if (fs.existsSync(p)) {
+                        try {
+                            // JSONとしてパース可能で、installedプロパティ(OAuthクライアント情報)を持つか確認
+                            const content = JSON.parse(fs.readFileSync(p, 'utf8'));
+                            if (content.installed && content.installed.client_id) {
+                                secretFile = p;
+                                console.log(`  ${C.dim(`既存のOAuthシークレットを検出しました: ${path.basename(p)}`)}`);
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                }
+
                 try {
                     await new Promise((resolve) => {
-                        const child = spawn('gog', ['auth', 'add', '--auto-open-browser'], {
+                        const authArgs = ['auth', 'add', '--auto-open-browser'];
+                        if (secretFile) {
+                            authArgs.push('--client-secret-file', secretFile);
+                        }
+
+                        const child = spawn('gog', authArgs, {
                             stdio: 'inherit',
                             shell: true,
                         });
