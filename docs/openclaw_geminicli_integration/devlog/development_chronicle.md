@@ -592,3 +592,20 @@
 - `f4c1e2a6` — fix(setup): use GEMINI_CLI_HOME for auth credential storage
 - `04241303` — feat(setup): replace gemini -login with headless PKCE auth script
 - `ac9804b3` — docs: establish programmatic auth protocol for Gemini CLI
+
+---
+
+## セッション 27: Git 追跡ポリシーの改善と安全性向上
+
+### やったこと
+
+- **.gitignore の最適化**: `gemini-home/.gemini/` ディレクトリ全体を無視していた設定を解除。`settings.json` などの基本設定ファイルは Git で管理・配布できるようにしつつ、`oauth_creds.json` や `google_accounts.json` などの個人認証情報、一時的な `installation_id` や `state.json` のみを確実に除外するように詳細化した。
+- **セッション情報の除外**: 新しく生成される `gemini-session-map.json` や `gemini-sessions/` ディレクトリを `.gitignore` に追加し、プライバシーとセキュリティを強化した。
+- **リリースパッケージの安全性向上**: `pack_release.sh` が README を親ディレクトリに展開して上書きしてしまう問題を修正。アダプタ専用の README はアダプタディレクトリ内に閉じ込めるように変更し、OpenClaw 本体の README を保護するようにした。
+
+### 変更したファイル
+- `.gitignore` — 追跡対象（settings.json）と除外対象（認証情報）の選別、セッション情報の除外
+- `pack_release.sh` — README の配置パスをアダプタディレクトリ内に修正
+
+### コミット
+- `2da50279` — fix(release): prevent README files from overwriting parent repo when extracted

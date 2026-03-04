@@ -31,6 +31,10 @@ adapter.pid
 # ※ extensions/ 以下のソースは追跡対象とするため、gemini-home/ 全体は無視しない
 gemini-home/.gemini/
 gemini-home/tmp/
+gemini-home/gemini-session-map.json
+gemini-home/extensions/extension-enablement.json
+gemini-home/gemini-sessions/
+
 # 拡張機能内の生成物・認証情報・依存パッケージ
 gemini-home/extensions/**/node_modules/
 gemini-home/extensions/**/dist/
