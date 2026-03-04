@@ -50,6 +50,12 @@ cat <<EOF > "$STAGE_ADAPTER/gemini-home/.gemini/settings.json"
 }
 EOF
 
+# Skills ディレクトリをコピー
+if [ -d "$ADAPTER_DIR/gemini-home/skills" ]; then
+    echo "Copying gemini-home/skills/..."
+    cp -r "$ADAPTER_DIR/gemini-home/skills" "$STAGE_ADAPTER/gemini-home/skills"
+fi
+
 
 # Scripts (needed by start.sh)
 mkdir -p "$STAGE_ADAPTER/scripts"

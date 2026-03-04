@@ -384,6 +384,24 @@ async function main() {
     } catch { console.log(C.red('FAIL')); }
 
     // Gemini settings
+    const ANTIGRAVITY_SKILLS_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'skills');
+    const bundledSkillsDir = path.join(GEMINI_CREDS_DIR, 'skills');
+    if (fs.existsSync(bundledSkillsDir)) {
+        process.stdout.write(`  スキルの配置中... `);
+        try {
+            fs.mkdirSync(ANTIGRAVITY_SKILLS_DIR, { recursive: true });
+            const skills = fs.readdirSync(bundledSkillsDir);
+            for (const skill of skills) {
+                const src = path.join(bundledSkillsDir, skill);
+                const dest = path.join(ANTIGRAVITY_SKILLS_DIR, skill);
+                fs.cpSync(src, dest, { recursive: true });
+            }
+            console.log(C.green('DONE'));
+        } catch (e) {
+            console.log(C.red('FAIL: ' + e.message));
+        }
+    }
+
     const settingsDir = path.join(GEMINI_CREDS_DIR, '.gemini');
     fs.mkdirSync(settingsDir, { recursive: true });
     const sp = path.join(settingsDir, 'settings.json');
@@ -452,7 +470,11 @@ async function main() {
     }
 
     // ─── 5.3. Google Workspace (gogcli) ───
-    if (!hasGogAuth) {
+    if (hasGogAuth) {
+        console.log(`\n  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
+        console.log(`  ${C.green('✓ Google Workspace (gogcli) は認証済みです。')}`);
+        console.log(`  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
+    } else {
         const gogLabels = {
             ja: {
                 q: '📊 Google Workspace（Gmail / Drive / Calendar 等）との連携を有効にしますか？',
