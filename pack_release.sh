@@ -50,18 +50,6 @@ cat <<EOF > "$STAGE_ADAPTER/gemini-home/.gemini/settings.json"
 }
 EOF
 
-# Extensions ディレクトリをコピー（認証トークンや個人データは除外）
-if [ -d "$ADAPTER_DIR/gemini-home/extensions" ]; then
-    echo "Copying gemini-home/extensions/..."
-    cp -r "$ADAPTER_DIR/gemini-home/extensions" "$STAGE_ADAPTER/gemini-home/extensions"
-    # 認証情報・個人データの除去
-    find "$STAGE_ADAPTER/gemini-home/extensions" -name "*token*.json" -delete 2>/dev/null || true
-    find "$STAGE_ADAPTER/gemini-home/extensions" -name "oauth_creds.json" -delete 2>/dev/null || true
-    find "$STAGE_ADAPTER/gemini-home/extensions" -name "google_accounts.json" -delete 2>/dev/null || true
-    find "$STAGE_ADAPTER/gemini-home/extensions" -name "credentials.json" -delete 2>/dev/null || true
-    # node_modules は重いので除外（セットアップ時に npm install される）
-    find "$STAGE_ADAPTER/gemini-home/extensions" -name "node_modules" -type d -exec rm -rf {} + 2>/dev/null || true
-fi
 
 # Scripts (needed by start.sh)
 mkdir -p "$STAGE_ADAPTER/scripts"

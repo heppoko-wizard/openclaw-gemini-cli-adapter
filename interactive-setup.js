@@ -245,14 +245,14 @@ async function main() {
     console.log(`  ${hasAuth ? C.green(`${L().found} Gemini CLI 認証`) : C.red(`${L().not_found} Gemini CLI 認証`)}`);
     if (!hasAuth) checks.push({ key: 'auth', label: 'Gemini CLI 認証 (Google ログイン)' });
 
-    // Google Workspace 認証
-    const WORKSPACE_EXT_DIR = path.join(PLUGIN_DIR, 'gemini-home', 'extensions', 'enhanced-google-workspace');
-    const WORKSPACE_AUTH_SCRIPT = path.join(WORKSPACE_EXT_DIR, 'scripts', 'auth-setup.js');
-    let hasWorkspace = false;
-    if (fs.existsSync(WORKSPACE_AUTH_SCRIPT)) {
-        hasWorkspace = spawnSync('node', [WORKSPACE_AUTH_SCRIPT, '--check'], { stdio: 'ignore' }).status === 0;
+    // Google Workspace (gogcli)
+    const gogBin = spawnSync('gog', ['--version'], { shell: true });
+    const hasGogcli = gogBin.status === 0;
+    let hasGogAuth = false;
+    if (hasGogcli) {
+        hasGogAuth = spawnSync('gog', ['auth', 'status', '--json'], { shell: true }).status === 0;
     }
-    console.log(`  ${hasWorkspace ? C.green(`${L().found} Google Workspace 認証`) : C.yellow(`${L().not_found} Google Workspace 認証 ${lang === 'ja' ? '(任意・セットアップ中に設定可能)' : '(optional - configurable during setup)'}`)}`);
+    console.log(`  ${hasGogcli ? C.green(`${L().found} gogcli (Google Workspace CLI)`) : C.yellow(`${L().not_found} gogcli ${lang === 'ja' ? '(任意・セットアップ中にインストール可能)' : '(optional - installable during setup)'}`)}`);
 
     // Tailscale
     const tsBin = spawnSync('tailscale', ['status'], { shell: true });
@@ -394,25 +394,7 @@ async function main() {
 
     fs.writeFileSync(sp, JSON.stringify(settings, null, 2));
 
-    // extension-enablement.json のパスを現在のユーザーのホームディレクトリに書き換え
-    // （Gemini CLI の公式セキュリティポリシーファイル。ハードコードされたパスを動的に置換）
-    process.stdout.write(`  extension-enablement.json のパスを更新... `);
-    try {
-        const extensionsDir = path.join(GEMINI_CREDS_DIR, 'extensions');
-        fs.mkdirSync(extensionsDir, { recursive: true });
-        const enablementPath = path.join(extensionsDir, 'extension-enablement.json');
-        // 既存ファイルがあれば読み込んで既存エントリを保持しつつ更新
-        let enablement = {};
-        try { enablement = JSON.parse(fs.readFileSync(enablementPath, 'utf8')); } catch {}
-        const homeGlob = process.platform === 'win32'
-            ? `${home.replace(/\\/g, '/')}/*`  // Windows: C:/Users/name/*
-            : `${home}/*`;                      // Unix: /home/name/*
-        enablement['enhanced-google-workspace'] = { overrides: [homeGlob] };
-        fs.writeFileSync(enablementPath, JSON.stringify(enablement, null, 2));
-        console.log(C.green('DONE'));
-    } catch (e) {
-        console.log(C.red('FAIL: ' + e.message));
-    }
+    // (gogcli方式に移行したため、extension-enablement.json の書き換えは不要)
 
     // ─── 5. Gemini 認証 (同じターミナル内) ───
     if (!hasAuth) {
@@ -453,76 +435,92 @@ async function main() {
         if (hasCredentials()) console.log(`\n  ${C.green(L().auth_done)}`);
     }
 
-    // ─── 5.3. Google Workspace 認証 (任意) ───
-    // const WORKSPACE_EXT_DIR = ... (上で定義済み)
-    // const WORKSPACE_AUTH_SCRIPT = ...
-    const workspaceExtExists = fs.existsSync(WORKSPACE_AUTH_SCRIPT);
-    
-    // 実際にキーチェーン/ファイルに認証情報があるかチェック
-    let isWsAuthenticated = false;
-    if (workspaceExtExists) {
-        isWsAuthenticated = spawnSync('node', [WORKSPACE_AUTH_SCRIPT, '--check'], { stdio: 'ignore' }).status === 0;
-    }
-
-    if (!isWsAuthenticated) {
-        const wsAuthLabels = {
+    // ─── 5.3. Google Workspace (gogcli) ───
+    if (!hasGogAuth) {
+        const gogLabels = {
             ja: {
-                q: '📊 Google Workspace（Gmail / Drive / Calendar）との連携を有効にしますか？',
-                yes: 'はい、Google アカウントでログインする（ブラウザが開きます）',
-                no: 'いいえ、スキップする（後から scripts/auth-setup.js で設定可能）',
-                start: 'ブラウザで Google にログインしてください。完了まで待機します...',
-                done: '✓ Google Workspace 認証が完了しました！',
-                fail: '✗ 認証に失敗しました。後から scripts/auth-setup.js を実行して再試行できます。',
+                q: '📊 Google Workspace（Gmail / Drive / Calendar 等）との連携を有効にしますか？',
+                yes: 'はい、gogcli をインストールして Google でログインする',
+                no: 'いいえ、スキップする（後から gog auth add <email> で設定可能）',
+                installing: 'gogcli をインストール中...',
+                install_fail: '⚠ gogcli のインストールに失敗しました。手動で https://github.com/steipete/gogcli を参照してください。',
+                creds_q: 'OAuth クライアントの設定が必要です。Google Cloud Console で作成した OAuth2 クライアントの JSON ファイルのパスを入力してください（未入力でスキップ）:',
+                auth_start: 'ブラウザで Google にログインしてください...',
+                done: '✓ gogcli の認証が完了しました！Gmail / Drive / Calendar が利用可能です。',
+                fail: '⚠ 認証に失敗しました。後から gog auth add <email> で再試行できます。',
             },
             en: {
-                q: '📊 Enable Google Workspace integration (Gmail / Drive / Calendar)?',
-                yes: 'Yes, log in with Google account (browser will open)',
-                no: 'No, skip for now (run scripts/auth-setup.js later)',
-                start: 'Please log in with Google in your browser. Waiting for completion...',
-                done: '✓ Google Workspace authentication complete!',
-                fail: '✗ Authentication failed. You can retry later by running scripts/auth-setup.js.',
+                q: '📊 Enable Google Workspace (Gmail / Drive / Calendar etc.) integration?',
+                yes: 'Yes, install gogcli and log in with Google',
+                no: 'No, skip for now (run gog auth add <email> later)',
+                installing: 'Installing gogcli...',
+                install_fail: '⚠ Failed to install gogcli. See https://github.com/steipete/gogcli for manual install.',
+                creds_q: 'OAuth client setup required. Enter the path to your OAuth2 client JSON file from Google Cloud Console (leave blank to skip):',
+                auth_start: 'Please log in with Google in your browser...',
+                done: '✓ gogcli authentication complete! Gmail / Drive / Calendar are now available.',
+                fail: '⚠ Authentication failed. You can retry later with gog auth add <email>.',
             }
         };
-        const WL = wsAuthLabels[lang];
+        const GL = gogLabels[lang];
 
         console.log(`\n  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
-        const wsChoice = await select([WL.yes, WL.no], WL.q);
+        const gogChoice = await select([GL.yes, GL.no], GL.q);
 
-        if (wsChoice === 0) {
-            console.log(`\n  ${C.cyan(WL.start)}`);
+        if (gogChoice === 0) {
+            // Step 1: gogcli がなければインストール
+            if (!hasGogcli) {
+                console.log(`\n  ${C.cyan(GL.installing)}`);
+                let installed = false;
+                if (process.platform === 'darwin') {
+                    // macOS: Homebrew
+                    const brewResult = spawnSync('brew', ['install', 'steipete/tap/gogcli'], { stdio: 'inherit', shell: true });
+                    installed = brewResult.status === 0;
+                } else if (process.platform === 'linux') {
+                    // Linux: go install or release binary
+                    const goResult = spawnSync('go', ['install', 'github.com/steipete/gogcli@latest'], { stdio: 'inherit', shell: true });
+                    if (goResult.status === 0) {
+                        installed = true;
+                    } else {
+                        // go がない場合、GitHub Releases からバイナリをダウンロード
+                        const arch = process.arch === 'x64' ? 'amd64' : process.arch;
+                        const dlCmd = `curl -sL "https://github.com/steipete/gogcli/releases/latest/download/gogcli_linux_${arch}.tar.gz" | tar xz -C /usr/local/bin gog`;
+                        console.log(`  ${C.dim('go が見つからないため、バイナリを直接ダウンロードします...')}`);
+                        const dlResult = spawnSync('sh', ['-c', dlCmd], { stdio: 'inherit' });
+                        installed = dlResult.status === 0;
+                    }
+                } else {
+                    // Windows: go install
+                    const goResult = spawnSync('go', ['install', 'github.com/steipete/gogcli@latest'], { stdio: 'inherit', shell: true });
+                    installed = goResult.status === 0;
+                }
 
-            // workspace拡張のnode_modulesにts-nodeがあるか確認し、なければインストール
-            const wsNodeModules = path.join(WORKSPACE_EXT_DIR, 'node_modules');
-            if (!fs.existsSync(wsNodeModules)) {
-                console.log(`  依存関係をインストール中...`);
-                run('npm', ['install'], WORKSPACE_EXT_DIR, false);
+                if (!installed) {
+                    console.log(`  ${C.yellow(GL.install_fail)}`);
+                }
             }
 
-            try {
-                await new Promise((resolve) => {
-                    const child = spawn('node', [WORKSPACE_AUTH_SCRIPT, '--force'], {
-                        cwd: WORKSPACE_EXT_DIR,
-                        stdio: ['pipe', 'inherit', 'pipe'],
-                        shell: false,
+            // Step 2: gogcli 認証
+            const gogVerify = spawnSync('gog', ['--version'], { shell: true });
+            if (gogVerify.status === 0) {
+                console.log(`\n  ${C.cyan(GL.auth_start)}`);
+                try {
+                    await new Promise((resolve) => {
+                        const child = spawn('gog', ['auth', 'add', '--auto-open-browser'], {
+                            stdio: 'inherit',
+                            shell: true,
+                        });
+                        child.on('close', (code) => {
+                            if (code === 0) {
+                                console.log(`\n  ${C.green(GL.done)}`);
+                            } else {
+                                console.log(`\n  ${C.yellow(GL.fail)}`);
+                            }
+                            resolve();
+                        });
                     });
-                    child.stderr.on('data', (d) => {
-                        const s = d.toString();
-                        // 認証URLだけ表示する
-                        if (s.includes('http') || s.includes('ACTION REQUIRED') || s.includes('Please open')) {
-                            process.stdout.write(s);
-                        }
-                    });
-                    child.on('close', (code) => {
-                        if (code === 0) {
-                            console.log(`\n  ${C.green(WL.done)}`);
-                        } else {
-                            console.log(`\n  ${C.yellow(WL.fail)}`);
-                        }
-                        resolve();
-                    });
-                });
-            } catch (e) {
-                console.log(`\n  ${C.yellow(WL.fail)}`);
+                } catch (e) {
+                    console.log(`\n  ${C.yellow(GL.fail)}`);
+                }
             }
         }
         console.log(`  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
