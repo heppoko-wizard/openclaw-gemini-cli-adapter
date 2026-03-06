@@ -701,3 +701,7 @@
 
 ### 変更したファイル
 - `interactive-setup.js` — Tailscale デーモン起動ロジックの全面改修：PID 1 判定による systemd/非systemd 分岐、フォールバック起動、文字列マッチ修正、インストール後ガード追加
+
+#### 追加修正: pnpm グローバルインストールの権限エラー修正
+- **問題**: `npm install -g pnpm` が `sudo` なしで実行されていたため、`EACCES: permission denied, mkdir '/usr/lib/node_modules/pnpm'` でインストールに失敗し、OpenClaw のビルド（`pnpm canvas:a2ui:bundle` 等）が `pnpm: not found` で止まっていた。
+- **修正**: Linux/macOS では `sudo npm install -g pnpm` に変更。Windows では `sudo` なしで実行（UAC 対応）。

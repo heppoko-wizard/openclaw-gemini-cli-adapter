@@ -349,7 +349,14 @@ async function main() {
     if (!ocBuilt) {
         console.log(`\n  ${C.bold(L().step_openclaw)} (build)...`);
         run('npm', ['install'], OPENCLAW_ROOT, false);
-        if (!run('pnpm', ['--version'], OPENCLAW_ROOT)) run('npm', ['install', '-g', 'pnpm'], OPENCLAW_ROOT, false);
+        if (!run('pnpm', ['--version'], OPENCLAW_ROOT)) {
+            console.log(`  ${C.cyan(lang === 'ja' ? 'pnpm をインストールしています...' : 'Installing pnpm...')}`);
+            if (process.platform === 'win32') {
+                spawnSync('npm', ['install', '-g', 'pnpm'], { cwd: OPENCLAW_ROOT, stdio: 'inherit', shell: true });
+            } else {
+                spawnSync('sudo', ['npm', 'install', '-g', 'pnpm'], { cwd: OPENCLAW_ROOT, stdio: 'inherit' });
+            }
+        }
         run('npm', ['run', 'build'], OPENCLAW_ROOT, false);
         run('npm', ['run', 'ui:build'], OPENCLAW_ROOT, false);
         console.log(`\n  ${C.green('DONE')}`);
