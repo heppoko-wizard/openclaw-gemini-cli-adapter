@@ -188,13 +188,13 @@ function hasCredentials() {
 }
 
 function isOpenclawPresent() {
-    try {
-        return JSON.parse(fs.readFileSync(path.join(OPENCLAW_ROOT, 'package.json'), 'utf8')).name === 'openclaw';
-    } catch { return false; }
+    // バイナリインストール版では openclaw コマンドが存在するかどうかで判定
+    return spawnSync('openclaw', ['--version'], { shell: true, stdio: 'pipe' }).status === 0;
 }
 
 function isOpenclawBuilt() {
-    return fs.existsSync(path.join(OPENCLAW_ROOT, 'dist', 'index.js'));
+    // バイナリインストール版はビルド不要
+    return isOpenclawPresent();
 }
 
 // ========== Main ==========
@@ -232,7 +232,7 @@ async function main() {
     const ocPresent = isOpenclawPresent();
     const ocBuilt = ocPresent && isOpenclawBuilt();
     console.log(`  ${ocPresent ? C.green(`${L().found} OpenClaw`) : C.red(`${L().not_found} OpenClaw`)}`);
-    if (!ocPresent) checks.push({ key: 'openclaw_dl', label: 'OpenClaw (ダウンロード + ビルド / Download + Build)' });
+    if (!ocPresent) checks.push({ key: 'openclaw_dl', label: 'OpenClaw (npm install -g openclaw@latest)' });
     else if (!ocBuilt) checks.push({ key: 'openclaw_build', label: 'OpenClaw (ビルド / Build)' });
 
     // Adapter deps
@@ -291,75 +291,19 @@ async function main() {
         console.log(C.green('DONE'));
     }
 
-    // OpenClaw DL
+    // OpenClaw バイナリインストール
     if (!ocPresent) {
-        process.stdout.write(`  ${L().step_openclaw}... `);
-        // Try GitHub release ZIP first
-        let ok = false;
-        try {
-            const info = await new Promise((resolve, reject) => {
-                https.get({
-                    hostname: 'api.github.com',
-                    path: '/repos/openclaw/openclaw/releases/latest',
-                    headers: { 'User-Agent': 'setup' }
-                }, res => {
-                    let b = ''; res.on('data', c => b += c);
-                    res.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
-                }).on('error', reject);
-            });
-            if (info.zipball_url) {
-                const zip = path.join(OPENCLAW_ROOT, 'oc.zip');
-                if (run('curl', ['-L', '-o', `"${zip}"`, `"${info.zipball_url}"`], OPENCLAW_ROOT)) {
-                    const tmp = path.join(OPENCLAW_ROOT, '_oc_tmp');
-                    fs.mkdirSync(tmp, { recursive: true });
-                    const unzipCmd = process.platform === 'win32'
-                        ? `powershell -Command "Expand-Archive -Force '${zip}' '${tmp}'"`
-                        : `unzip -q "${zip}" -d "${tmp}"`;
-                    if (run(unzipCmd, [], OPENCLAW_ROOT)) {
-                        const entries = fs.readdirSync(tmp);
-                        const inner = entries.length === 1 ? path.join(tmp, entries[0]) : tmp;
-                        fs.cpSync(inner, OPENCLAW_ROOT, { recursive: true });
-                        ok = true;
-                    }
-                    try { fs.rmSync(tmp, { recursive: true, force: true }); fs.rmSync(zip); } catch { }
-                }
-            }
-        } catch { }
-        if (!ok) {
-            const tmpGit = path.join(OPENCLAW_ROOT, '_oc_git');
-            try { fs.rmSync(tmpGit, { recursive: true, force: true }); } catch { }
-            if (run('git', ['clone', '--depth', '1', 'https://github.com/openclaw/openclaw.git', `"${tmpGit}"`], OPENCLAW_ROOT)) {
-                try {
-                    const entries = fs.readdirSync(tmpGit);
-                    for (const e of entries) {
-                        if (e === '.git') continue;
-                        fs.cpSync(path.join(tmpGit, e), path.join(OPENCLAW_ROOT, e), { recursive: true });
-                    }
-                    fs.rmSync(tmpGit, { recursive: true, force: true });
-                    ok = true;
-                } catch (err) {
-                    console.log(`\n  ${C.yellow('Warning:')} Failed to copy files from downloaded git repo: ${err}`);
-                }
-            }
+        console.log(`\n  ${C.bold(lang === 'ja' ? 'OpenClaw をインストールしています...' : 'Installing OpenClaw...')}`);
+        if (process.platform === 'win32') {
+            spawnSync('npm', ['install', '-g', 'openclaw@latest'], { stdio: 'inherit', shell: true });
+        } else {
+            spawnSync('sudo', ['npm', 'install', '-g', 'openclaw@latest'], { stdio: 'inherit' });
         }
-        console.log(C.green('DONE'));
-    }
-
-    // OpenClaw Build
-    if (!ocBuilt) {
-        console.log(`\n  ${C.bold(L().step_openclaw)} (build)...`);
-        run('npm', ['install'], OPENCLAW_ROOT, false);
-        if (!run('pnpm', ['--version'], OPENCLAW_ROOT)) {
-            console.log(`  ${C.cyan(lang === 'ja' ? 'pnpm をインストールしています...' : 'Installing pnpm...')}`);
-            if (process.platform === 'win32') {
-                spawnSync('npm', ['install', '-g', 'pnpm'], { cwd: OPENCLAW_ROOT, stdio: 'inherit', shell: true });
-            } else {
-                spawnSync('sudo', ['npm', 'install', '-g', 'pnpm'], { cwd: OPENCLAW_ROOT, stdio: 'inherit' });
-            }
+        if (!isOpenclawPresent()) {
+            console.log(`  ${C.yellow(lang === 'ja' ? '⚠ OpenClaw のインストールに失敗しました。手動で実行してください: sudo npm install -g openclaw@latest' : '⚠ OpenClaw installation failed. Run manually: sudo npm install -g openclaw@latest')}`);
+        } else {
+            console.log(`\n  ${C.green('DONE')}`);
         }
-        run('npm', ['run', 'build'], OPENCLAW_ROOT, false);
-        run('npm', ['run', 'ui:build'], OPENCLAW_ROOT, false);
-        console.log(`\n  ${C.green('DONE')}`);
     }
 
     // Adapter deps

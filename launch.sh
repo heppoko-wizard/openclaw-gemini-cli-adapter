@@ -23,23 +23,11 @@ chmod +x start.sh 2>/dev/null || true
 
 echo ""
 echo "[2/4] UIアセットの確認中..."
-cd ..
-if [ ! -f "dist/control-ui/index.html" ]; then
-    echo "⚠️  UIアセットが見つかりません。ビルドを開始します..."
-    if command -v pnpm >/dev/null 2>&1; then
-        pnpm ui:build
-    elif command -v npm >/dev/null 2>&1; then
-        npm run ui:build
-    else
-        echo "❌ エラー: pnpm/npm が見つかりません。UIビルドをスキップします。"
-    fi
-    if [ -f "dist/control-ui/index.html" ]; then
-        echo "✓ UIビルドが完了しました。"
-    else
-        echo "⚠️  UIビルドが失敗したか、まだ完了していません。ダッシュボードが表示されない場合は 'pnpm ui:build' を手動実行してください。"
-    fi
+if command -v openclaw >/dev/null 2>&1; then
+    echo "✓ OpenClaw バイナリ確認済み（UIはバイナリに含まれています）。"
 else
-    echo "✓ UIアセット確認済み。"
+    echo "❌ openclaw コマンドが見つかりません。sudo npm install -g openclaw@latest を実行してください。"
+    exit 1
 fi
 
 echo ""
@@ -53,8 +41,8 @@ GATEWAY_LOG="openclaw-gateway.log"
 if nc -z localhost 18789 2>/dev/null || lsof -i :18789 >/dev/null 2>&1; then
     echo "Gateway is already running on port 18789. (Skipping startup)"
 else
-    # Gatewayをバックグラウンドで起動 (gatewayコマンドを明示)
-    nohup npm run openclaw -- gateway > "$GATEWAY_LOG" 2>&1 &
+    # Gatewayをバックグラウンドで起動
+    nohup openclaw gateway > "$GATEWAY_LOG" 2>&1 &
     GATEWAY_PID=$!
     echo "Gateway started (PID: $GATEWAY_PID)"
     echo "Gatewayの起動（およびセットアップ）を待機しています..."
@@ -72,7 +60,7 @@ fi
 echo ""
 echo "[4/4] ダッシュボードをブラウザで開きます..."
 # dashboardコマンドを実行してURLを生成しブラウザを開く
-npm run openclaw -- dashboard
+openclaw dashboard
 
 echo ""
 echo "================================================="
