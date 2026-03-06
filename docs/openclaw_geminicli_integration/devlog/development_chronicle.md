@@ -666,9 +666,38 @@
 ### 変更したファイル
 - `interactive-setup.js` — Tailscale セクション（L653-805）を全面書き換え：スキップ選択肢追加、sudo stdio 修正、`--reset` 削除、90秒タイムアウト追加、認証URL 自動オープン
 
-### 追記：WSL2 デフォルト環境（systemd 無効）への対応
-- **追加の問題**: デフォルトの WSL2 環境では `systemd` が PID 1 として動いていないため、`systemctl` を使うデーモン起動（`tailscaled`）が失敗し、認証ステップで「デーモンが動いていない」とエラーになる問題が発生した。
-- **デバッグ過程**: 
-  - `tailscale status` の戻り値が `includes('not running')` では検知できていなかった。実際のエラーメッセージ `"doesn't appear to be running"` に合わせ `includes('appear to be running')` も判定に追加。
-  - `/proc/1/comm` を読み取り、PID 1 が `systemd` でない場合は、`sudo sh -c 'tailscaled > /dev/null 2>&1 &'` で直接バックグラウンド起動するフォールバック処理を実装。
-- **最終結果**: WSL2 環境においても、デーモンの自動起動からブラウザ認証までがシームレスに動作することを確認。
+## セッション 29.1: Tailscale デーモン起動の WSL2 対応デバッグ (2026-03-06)
+
+### やったこと
+- **4段階のバグ修正を実施**（セッション29の修正コードに対して、実環境テストで発見された追加バグを順次修正）：
+
+#### バグ1: `authTimedOut` の ReferenceError
+- `let authTimedOut` が `else` ブロック内（認証フロー内）で宣言されていたが、外側の `if (!authTimedOut)` で参照されていた。
+- **修正**: 変数宣言を `try` ブロックの外側（`tsChoice === 0` の直下）に移動。
+
+#### バグ2: `tailscaled` デーモン未起動
+- Tailscale のインストール直後、`tailscaled` デーモンが自動起動されず、`tailscale up` が `failed to connect to local tailscaled` で即座に失敗していた。
+- **修正**: インストール後に `systemctl daemon-reload` + `systemctl enable --now tailscaled` を実行するコードを追加。
+
+#### バグ3: インストール失敗時のガード欠如
+- ネットワークエラー（`curl: (56) Failure when receiving data from the peer`）でインストールが失敗しても、認証ステップに進んでしまい `sudo: tailscale: command not found` で失敗していた。
+- **修正**: インストール後に `tailscale version` で再確認し、コマンドが存在しなければ `throw` でスキップするガードを追加。
+
+#### バグ4: WSL2 で systemd が動いていない問題（根本原因）
+- この WSL2 環境では PID 1 が `init(Ubuntu-24.)` であり、**systemd が有効になっていない**。そのため `systemctl start tailscaled` が `System has not been booted with systemd as init system` で失敗していた。
+- さらに、デーモン停止の検出に `includes('not running')` を使用していたが、実際のエラーメッセージは `"doesn't appear to be running"` であり、**部分文字列が一致しないためデーモン起動ロジック自体がスキップされていた**。
+- **修正**:
+  1. 検出文字列を `includes('appear to be running')` に変更。
+  2. `/proc/1/comm` を読み取り PID 1 が `systemd` かどうかを判定。
+  3. systemd 環境では `systemctl enable --now tailscaled` を使用。
+  4. 非 systemd 環境（WSL2）では `sudo sh -c 'tailscaled > /dev/null 2>&1 &'` で直接バックグラウンド起動するフォールバックを実装。
+  5. 起動後に3秒待機し、再度 `tailscale status` で確認。失敗時は `throw` でスキップ。
+
+### 発見・学んだこと
+- **WSL2 のデフォルトは systemd 非対応**: WSL2 (Ubuntu 24.04) はデフォルトで `init` が PID 1 であり、systemd は無効。`/etc/wsl.conf` で `[boot] systemd=true` を設定しない限り有効にならない。
+- **`systemctl` コマンドの罠**: `systemctl is-system-running` は systemd が無効でも exit code 1（`offline`）を返す。exit code 127（コマンド未検出）ではないため、「systemctl が存在する = systemd が使える」という判定は**完全に間違い**。`/proc/1/comm` を読むのが唯一確実な方法。
+- **エラーメッセージの文字列マッチの罠**: `"doesn't appear to be running"` は `"not running"` を含まない。デバッグ時にエラーメッセージを目視で確認しただけでは気づけず、テストスクリプトで `JSON.stringify()` した出力を見て初めて判明した。
+- **`spawnSync` + バックグラウンドプロセス**: `spawnSync('sudo', ['sh', '-c', 'tailscaled > /dev/null 2>&1 &'])` で WSL2 上のデーモンをバックグラウンド起動でき、`tailscale status` が正常応答（`Logged out.`）を返すことを確認。
+
+### 変更したファイル
+- `interactive-setup.js` — Tailscale デーモン起動ロジックの全面改修：PID 1 判定による systemd/非systemd 分岐、フォールバック起動、文字列マッチ修正、インストール後ガード追加
