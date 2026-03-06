@@ -291,16 +291,25 @@ async function main() {
         console.log(C.green('DONE'));
     }
 
-    // OpenClaw バイナリインストール
+    // OpenClaw 公式インストーラーの実行
     if (!ocPresent) {
-        console.log(`\n  ${C.bold(lang === 'ja' ? 'OpenClaw をインストールしています...' : 'Installing OpenClaw...')}`);
+        console.log(`\n  ${C.bold(lang === 'ja' ? 'OpenClaw 公式インストーラーを実行しています...' : 'Running official OpenClaw installer...')}`);
         if (process.platform === 'win32') {
-            spawnSync('npm', ['install', '-g', 'openclaw@latest'], { stdio: 'inherit', shell: true });
+            // Windows: powershell 版インストーラー
+            spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "iwr -useb https://openclaw.ai/install.ps1 | iex"], { stdio: 'inherit' });
         } else {
-            spawnSync('sudo', ['npm', 'install', '-g', 'openclaw@latest'], { stdio: 'inherit' });
+            // Linux/macOS: install.sh を一度保存して実行 (パイプだと途中で入力を受け付けられない場合があるため)
+            const scriptPath = '/tmp/oc_install.sh';
+            if (run('curl', ['-fsSL', '-o', scriptPath, 'https://openclaw.ai/install.sh'])) {
+                spawnSync('bash', [scriptPath], { stdio: 'inherit' });
+                try { fs.rmSync(scriptPath); } catch { }
+            } else {
+                // curl が失敗した場合は npm にフォールバック
+                spawnSync('sudo', ['npm', 'install', '-g', 'openclaw@latest'], { stdio: 'inherit' });
+            }
         }
         if (!isOpenclawPresent()) {
-            console.log(`  ${C.yellow(lang === 'ja' ? '⚠ OpenClaw のインストールに失敗しました。手動で実行してください: sudo npm install -g openclaw@latest' : '⚠ OpenClaw installation failed. Run manually: sudo npm install -g openclaw@latest')}`);
+            console.log(`  ${C.yellow(lang === 'ja' ? '⚠ OpenClaw のインストールに失敗しました。' : '⚠ OpenClaw installation failed.')}`);
         } else {
             console.log(`\n  ${C.green('DONE')}`);
         }
