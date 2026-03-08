@@ -11,11 +11,8 @@ echo "================================================="
 
 # Get version from package.json
 VERSION=$(node -p "require('$ADAPTER_DIR/package.json').version")
-# RELEASE_OUTPUT_DIR 環境変数 → ~/ドキュメント/tmp → /tmp の優先順位でフォールバック
-OUTPUT_DIR="${RELEASE_OUTPUT_DIR:-${HOME}/ドキュメント/tmp}"
-if [ ! -d "$(dirname "$OUTPUT_DIR")" ]; then
-    OUTPUT_DIR="${TMPDIR:-/tmp}"
-fi
+# RELEASE_OUTPUT_DIR 環境変数指定がない場合は、ユーザーのホームディレクトリに出力する
+OUTPUT_DIR="${RELEASE_OUTPUT_DIR:-${HOME}}"
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_ZIP="$OUTPUT_DIR/${ADAPTER_NAME}-v${VERSION}.zip"
 
