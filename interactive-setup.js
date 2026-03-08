@@ -246,14 +246,14 @@ async function main() {
     console.log(`  ${hasAuth ? C.green(`${L().found} Gemini CLI 認証`) : C.red(`${L().not_found} Gemini CLI 認証`)}`);
     if (!hasAuth) checks.push({ key: 'auth', label: 'Gemini CLI 認証 (Google ログイン)' });
 
-    // Google Workspace (gogcli)
-    const gogBin = spawnSync('gog', ['--version'], { shell: true });
-    const hasGogcli = gogBin.status === 0;
-    let hasGogAuth = false;
-    if (hasGogcli) {
-        hasGogAuth = spawnSync('gog', ['auth', 'status', '--json'], { shell: true }).status === 0;
+    // Google Workspace (gws)
+    const gwsBin = spawnSync('gws', ['--version'], { shell: true });
+    const hasGws = gwsBin.status === 0;
+    let hasGwsAuth = false;
+    if (hasGws) {
+        hasGwsAuth = spawnSync('gws', ['auth', 'status'], { shell: true }).status === 0;
     }
-    console.log(`  ${hasGogcli ? C.green(`${L().found} gogcli (Google Workspace CLI)`) : C.yellow(`${L().not_found} gogcli ${lang === 'ja' ? '(任意・セットアップ中にインストール可能)' : '(optional - installable during setup)'}`)}`);
+    console.log(`  ${hasGws ? C.green(`${L().found} gws (Google Workspace CLI)`) : C.yellow(`${L().not_found} gws ${lang === 'ja' ? '(任意・セットアップ中にインストール可能)' : '(optional - installable during setup)'}`)}`);
 
     // Tailscale
     const tsBin = spawnSync('tailscale', ['status'], { shell: true });
@@ -417,7 +417,7 @@ async function main() {
 
     fs.writeFileSync(sp, JSON.stringify(settings, null, 2));
 
-    // (gogcli方式に移行したため、extension-enablement.json の書き換えは不要)
+    // (gws方式に移行したため、extension-enablement.json の書き換えは不要)
 
     // ─── 5. Gemini 認証 (同じターミナル内) ───
     if (!hasAuth) {
@@ -458,49 +458,49 @@ async function main() {
         if (hasCredentials()) console.log(`\n  ${C.green(L().auth_done)}`);
     }
 
-    // ─── 5.3. Google Workspace (gogcli) ───
-    if (hasGogAuth) {
+    // ─── 5.3. Google Workspace (gws) ───
+    if (hasGwsAuth) {
         console.log(`\n  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
-        console.log(`  ${C.green('✓ Google Workspace (gogcli) は認証済みです。')}`);
+        console.log(`  ${C.green('✓ Google Workspace (gws) は認証済みです。')}`);
         console.log(`  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
     } else {
-        const gogLabels = {
+        const gwsLabels = {
             ja: {
                 q: '📊 Google Workspace（Gmail / Drive / Calendar 等）との連携を有効にしますか？',
-                yes: 'はい、gogcli をインストールして Google でログインする',
-                no: 'いいえ、スキップする（後から gog auth add <email> で設定可能）',
-                installing: 'gogcli をインストール中...',
-                install_fail: '⚠ gogcli のインストールに失敗しました。手動で https://github.com/steipete/gogcli を参照してください。',
+                yes: 'はい、gws をインストールして Google でログインする',
+                no: 'いいえ、スキップする（後から gws auth login で設定可能）',
+                installing: 'gws をインストール中...',
+                install_fail: '⚠ gws のインストールに失敗しました。手動で https://github.com/steipete/gws を参照してください。',
                 creds_q: 'OAuth クライアントの設定が必要です。Google Cloud Console で作成した OAuth2 クライアントの JSON ファイルのパスを入力してください（未入力でスキップ）:',
                 auth_start: 'ブラウザで Google にログインしてください...',
-                done: '✓ gogcli の認証が完了しました！Gmail / Drive / Calendar が利用可能です。',
-                fail: '⚠ 認証に失敗しました。後から gog auth add <email> で再試行できます。',
+                done: '✓ gws の認証が完了しました！Gmail / Drive / Calendar が利用可能です。',
+                fail: '⚠ 認証に失敗しました。後から gws auth login で再試行できます。',
             },
             en: {
                 q: '📊 Enable Google Workspace (Gmail / Drive / Calendar etc.) integration?',
-                yes: 'Yes, install gogcli and log in with Google',
-                no: 'No, skip for now (run gog auth add <email> later)',
-                installing: 'Installing gogcli...',
-                install_fail: '⚠ Failed to install gogcli. See https://github.com/steipete/gogcli for manual install.',
+                yes: 'Yes, install gws and log in with Google',
+                no: 'No, skip for now (run gws auth login later)',
+                installing: 'Installing gws...',
+                install_fail: '⚠ Failed to install gws. See https://github.com/steipete/gws for manual install.',
                 creds_q: 'OAuth client setup required. Enter the path to your OAuth2 client JSON file from Google Cloud Console (leave blank to skip):',
                 auth_start: 'Please log in with Google in your browser...',
-                done: '✓ gogcli authentication complete! Gmail / Drive / Calendar are now available.',
-                fail: '⚠ Authentication failed. You can retry later with gog auth add <email>.',
+                done: '✓ gws authentication complete! Gmail / Drive / Calendar are now available.',
+                fail: '⚠ Authentication failed. You can retry later with gws auth login.',
             }
         };
-        const GL = gogLabels[lang];
+        const GL = gwsLabels[lang];
 
         console.log(`\n  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
-        const gogChoice = await select([GL.yes, GL.no], GL.q);
+        const gwsChoice = await select([GL.yes, GL.no], GL.q);
 
-        if (gogChoice === 0) {
-            // Step 1: gogcli がなければインストール
-            if (!hasGogcli) {
+        if (gwsChoice === 0) {
+            // Step 1: gws がなければインストール
+            if (!hasGws) {
                 console.log(`\n  ${C.cyan(GL.installing)}`);
                 let installed = false;
                 if (process.platform === 'darwin') {
                     // macOS: Homebrew
-                    const brewResult = spawnSync('brew', ['install', 'steipete/tap/gogcli'], { stdio: 'inherit', shell: true });
+                    const brewResult = spawnSync('brew', ['install', 'steipete/tap/gws'], { stdio: 'inherit', shell: true });
                     installed = brewResult.status === 0;
                 } else if (process.platform === 'linux') {
                     // Linux: GitHub Releases APIからバージョン付きURLを取得してDL
@@ -510,7 +510,7 @@ async function main() {
                         const releaseInfo = await new Promise((resolve, reject) => {
                             https.get({
                                 hostname: 'api.github.com',
-                                path: '/repos/steipete/gogcli/releases/latest',
+                                path: '/repos/googleworkspace/cli/releases/latest',
                                 headers: { 'User-Agent': 'openclaw-setup' }
                             }, res => {
                                 let b = ''; res.on('data', c => b += c);
@@ -519,7 +519,7 @@ async function main() {
                         });
                         const asset = (releaseInfo.assets || []).find(a => a.name.includes(`linux_${arch}`) && a.name.endsWith('.tar.gz'));
                         if (asset) {
-                            const dlCmd = `curl -fsSL "${asset.browser_download_url}" | tar xz -C /usr/local/bin gog`;
+                            const dlCmd = `curl -fsSL "${asset.browser_download_url}" | tar xz -C /usr/local/bin gws`;
                             console.log(`  ${C.dim(`ダウンロード: ${asset.name}`)}`);
                             const dlResult = spawnSync('sudo', ['sh', '-c', dlCmd], { stdio: 'inherit' });
                             installed = dlResult.status === 0;
@@ -537,7 +537,7 @@ async function main() {
                         const releaseInfo = await new Promise((resolve, reject) => {
                             https.get({
                                 hostname: 'api.github.com',
-                                path: '/repos/steipete/gogcli/releases/latest',
+                                path: '/repos/googleworkspace/cli/releases/latest',
                                 headers: { 'User-Agent': 'openclaw-setup' }
                             }, res => {
                                 let b = ''; res.on('data', c => b += c);
@@ -546,7 +546,7 @@ async function main() {
                         });
                         const asset = (releaseInfo.assets || []).find(a => a.name.includes(`windows_${arch}`) && a.name.endsWith('.zip'));
                         if (asset) {
-                            const tmpZip = path.join(os.tmpdir(), 'gogcli.zip');
+                            const tmpZip = path.join(os.tmpdir(), 'gws.zip');
                             const dlResult = spawnSync('powershell', ['-Command', `Invoke-WebRequest -Uri "${asset.browser_download_url}" -OutFile "${tmpZip}"; Expand-Archive -Force "${tmpZip}" -DestinationPath "C:\\Windows\\System32"; Remove-Item "${tmpZip}"`], { stdio: 'inherit', shell: true });
                             installed = dlResult.status === 0;
                         }
@@ -560,9 +560,9 @@ async function main() {
                 }
             }
 
-            // Step 2: gogcli 認証
-            const gogVerify = spawnSync('gog', ['--version'], { shell: true });
-            if (gogVerify.status === 0) {
+            // Step 2: gws 認証
+            const gwsVerify = spawnSync('gws', ['--version'], { shell: true });
+            if (gwsVerify.status === 0) {
                 console.log(`\n  ${C.cyan(GL.auth_start)}`);
 
                 // ★ 旧エクステンション等からのシークレット(credentials.json)引き継ぎ処理 ★
@@ -588,50 +588,64 @@ async function main() {
                 }
 
                 try {
-                    // gogcliはアカウント保存用のラベルとしてemail引数を必須とするため、ダミー値を使用
+                    // gwsはアカウント保存用のラベルとしてemail引数を必須とするため、ダミー値を使用
                     // (実際のGoogleアカウントは開いたブラウザ側で選択可能)
-                    const email = 'default@openclaw';
-                    console.log(`  ${C.dim('ブラウザが開きます。連携したいGoogleアカウントを選択してください。')}`);
 
-                    const authArgs = ['auth', 'add', email, '--services=all', '--force-consent'];
-                    if (secretFile) {
-                        // credentials.json が見つかった場合はクライアント情報を充てる
-                        // gogcliは環境変数 GOGCLI_CLIENT_ID/SECRET を参照するので、.bashrcに記载済み
-                        console.log(`  ${C.dim('既存OAuth設定（bashrcのGOGCLI_CLIENT_ID）が利用されます')}`);
+                    // 1. Install Gemini CLI extension for Google Workspace
+                    console.log(`  ${C.cyan('Gemini CLI 拡張機能（Google Workspace）をインストールしています...')}`);
+                    const extInstall = spawnSync('gemini', ['extensions', 'install', 'https://github.com/googleworkspace/cli', '--consent'], { stdio: 'inherit', shell: true });
+                    if (extInstall.status === 0) {
+                        console.log(`  ${C.green('✓ 拡張機能のインストール完了')}`);
+                    } else {
+                        console.log(`  ${C.yellow('⚠ 拡張機能のインストールに失敗しましたが、続行します。')}`);
                     }
+
+                    // 2. gws auth setup (初期セットアップ)
+                    console.log(`\n  ${C.cyan('Google Cloud プロジェクトのセットアップを実行中 (gws auth setup)...')}`);
+                    // gcloud CLI が必要
+                    const gcloudCheck = spawnSync('gcloud', ['--version'], { shell: true });
+                    if (gcloudCheck.status !== 0) {
+                        console.log(`  ${C.yellow('⚠ gcloud CLI がインストールされていない可能性があります。セットアップが失敗するかもしれません。')}`);
+                    }
+
+                    spawnSync('gws', ['auth', 'setup'], { stdio: 'inherit', shell: true });
+
+                    // 3. gws auth login (ログインと権限許可)
+                    console.log(`\n  ${C.cyan('ブラウザが開きます。連携したいGoogleアカウントを選択してください (gws auth login)。')}`);
                     await new Promise((resolve) => {
-                        const child = spawn('gog', authArgs, {
-                            stdio: 'inherit',
+                        const child = spawn('gws', ['auth', 'login'], {
+                            stdio: ['inherit', 'pipe', 'pipe'],
                             shell: true,
                         });
+
+                        let urlOpened = false;
+                        const handleOutput = (d) => {
+                            const s = d.toString();
+                            process.stderr.write(C.dim(s));
+
+                            // 認証URLを正規表現で抽出
+                            const urlMatch = s.match(/(https?:\/\/[^\s]+)/);
+                            if (urlMatch && !urlOpened) {
+                                urlOpened = true;
+                                console.log(`\n  ${C.dim('自動で開かない場合は、以下のURLをブラウザに貼り付けてください:')}`);
+                                console.log(`  🔗 ${C.cyan(urlMatch[1])}`);
+                                openBrowser(urlMatch[1]);
+                            }
+                        };
+
+                        if (child.stdout) child.stdout.on('data', handleOutput);
+                        if (child.stderr) child.stderr.on('data', handleOutput);
+
                         child.on('close', (code) => {
                             if (code === 0) {
-                                // 認証成功後、実際のアカウントアドレスを取得してエイリアスを貼る
-                                try {
-                                    const stRes = spawnSync('gog', ['auth', 'status', '--json'], { shell: true });
-                                    if (stRes.status === 0) {
-                                        const stData = JSON.parse(stRes.stdout.toString());
-                                        const realEmail = stData.account?.email;
-                                        if (realEmail && realEmail !== email) {
-                                            // 実メール名でエイリアス（実メアド -> default@openclaw）を張って直感的に使えるようにする
-                                            spawnSync('gog', ['auth', 'alias', 'set', realEmail, email], { shell: true });
-                                            // ターミナルの表示用
-                                            console.log(`\n  ${C.green(GL.done)} ${C.dim(`(${realEmail})`)}`);
-                                        } else {
-                                            console.log(`\n  ${C.green(GL.done)}`);
-                                        }
-                                    } else {
-                                        console.log(`\n  ${C.green(GL.done)}`);
-                                    }
-                                } catch (e) {
-                                    console.log(`\n  ${C.green(GL.done)}`);
-                                }
+                                console.log(`\n  ${C.green(GL.done)}`);
                             } else {
                                 console.log(`\n  ${C.yellow(GL.fail)}`);
                             }
                             resolve();
                         });
                     });
+
                 } catch (e) {
                     console.log(`\n  ${C.yellow(GL.fail)}`);
                 }
