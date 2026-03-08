@@ -39,7 +39,7 @@ function logToBoth(msg) {
             fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
         }
         fs.appendFileSync(LOG_FILE, formatted + "\n");
-    } catch (_) {}
+    } catch (_) { }
 }
 
 // The openclaw repo root is one level above this `openclaw-gemini-cli-adapter/` directory.
@@ -103,9 +103,11 @@ function findCreateOpenClawToolsChunk(distDir) {
 // ---------- [2] Dynamic Tool Loading ----------
 let openclawTools = [];
 
-// Gemini CLI が標準提供するツール → MCP経由では除外（重複回避）
-// browser / tts はOpenClaw固有なので除外しない
-const GEMINI_NATIVE_TOOLS = new Set([
+// ------------------------------------------------------------------
+// [重複回避] Gemini CLI 側ですでに提供されているツールのリスト
+// このリストに含まれる名前のツールは、OpenClaw側のMCPツールから除外します。
+// ------------------------------------------------------------------
+const EXCLUDED_DUPLICATE_TOOLS = new Set([
     "read", "write", "edit", "exec", "bash", "process",
     "webSearch", "web_search", "webFetch", "web_fetch",
     "image", "canvas",
@@ -178,8 +180,8 @@ async function loadOpenClawTools(sessionKey, workspaceDir) {
             senderIsOwner: true,
         });
 
-        // Step 6: Gemini CLI ネイティブと重複するツールをさらに念のため除外
-        openclawTools = allTools.filter(t => !GEMINI_NATIVE_TOOLS.has(t.name));
+        // Step 6: Gemini CLI ネイティブと重複するツールを除外
+        openclawTools = allTools.filter(t => !EXCLUDED_DUPLICATE_TOOLS.has(t.name));
 
         logToBoth(`[MCP Adapter] Loaded ${openclawTools.length} OpenClaw tools:`);
         logToBoth(`  ${openclawTools.map(t => t.name).join(", ")}`);
