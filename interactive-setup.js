@@ -23,11 +23,12 @@ let PLUGIN_DIR = SCRIPT_DIR;
 const BASENAME = path.basename(SCRIPT_DIR);
 if (BASENAME !== 'openclaw-gemini-cli-adapter' && BASENAME !== 'gemini-cli-claw') {
     OPENCLAW_ROOT = SCRIPT_DIR;
-    PLUGIN_DIR = path.join(SCRIPT_DIR, 'openclaw-gemini-cli-adapter');
+    PLUGIN_DIR = path.join(
+        SCRIPT_DIR, 'openclaw-gemini-cli-adapter');
 }
 
 const OPENCLAW_CONFIG = path.join(os.homedir(), '.openclaw', 'openclaw.json');
-const GEMINI_CREDS_DIR = path.join(PLUGIN_DIR, 'gemini-home');
+let GEMINI_CREDS_DIR = path.join(PLUGIN_DIR, 'gemini-home');
 
 // --- I18n ---
 const MSG = {
@@ -291,27 +292,55 @@ async function main() {
         console.log(C.green('DONE'));
     }
 
-    // OpenClaw 公式インストーラーの実行
+    // OpenClaw バイナリインストール
     if (!ocPresent) {
-        console.log(`\n  ${C.bold(lang === 'ja' ? 'OpenClaw 公式インストーラーを実行しています...' : 'Running official OpenClaw installer...')}`);
+        console.log(`\n  ${C.bold(lang === 'ja' ? 'OpenClaw をインストールしています...' : 'Installing OpenClaw...')}`);
         if (process.platform === 'win32') {
-            // Windows: powershell 版インストーラー
-            spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "iwr -useb https://openclaw.ai/install.ps1 | iex"], { stdio: 'inherit' });
+            spawnSync('npm', ['install', '-g', 'openclaw@latest'], { stdio: 'inherit', shell: true });
         } else {
-            // Linux/macOS: install.sh を一度保存して実行 (パイプだと途中で入力を受け付けられない場合があるため)
-            const scriptPath = '/tmp/oc_install.sh';
-            if (run('curl', ['-fsSL', '-o', scriptPath, 'https://openclaw.ai/install.sh'])) {
-                spawnSync('bash', [scriptPath], { stdio: 'inherit' });
-                try { fs.rmSync(scriptPath); } catch { }
-            } else {
-                // curl が失敗した場合は npm にフォールバック
-                spawnSync('sudo', ['npm', 'install', '-g', 'openclaw@latest'], { stdio: 'inherit' });
-            }
+            spawnSync('sudo', ['npm', 'install', '-g', 'openclaw@latest'], { stdio: 'inherit' });
         }
         if (!isOpenclawPresent()) {
-            console.log(`  ${C.yellow(lang === 'ja' ? '⚠ OpenClaw のインストールに失敗しました。' : '⚠ OpenClaw installation failed.')}`);
+            console.log(`  ${C.yellow(lang === 'ja' ? '⚠ OpenClaw のインストールに失敗しました。手動で実行してください: sudo npm install -g openclaw@latest' : '⚠ OpenClaw installation failed. Run manually: sudo npm install -g openclaw@latest')}`);
         } else {
             console.log(`\n  ${C.green('DONE')}`);
+        }
+    }
+
+    // アダプターを OpenClaw のインストール先ディレクトリにコピー
+    // (これにより mcp-server.mjs の OPENCLAW_ROOT = path.resolve(__dirname, '..') が正しく解決される)
+    {
+        const npmRootResult = spawnSync('npm', ['root', '-g'], { encoding: 'utf-8' });
+        const npmRoot = npmRootResult.stdout?.trim();
+        if (npmRoot) {
+            const openclawInstallDir = path.join(npmRoot, 'openclaw');
+            const adapterDest = path.join(openclawInstallDir, 'openclaw-gemini-cli-adapter');
+            const adapterSrc = PLUGIN_DIR;
+            if (fs.existsSync(openclawInstallDir) && adapterSrc !== adapterDest) {
+                console.log(`\n  ${C.cyan(lang === 'ja' ? `アダプターを OpenClaw インストール先にコピー中...` : `Copying adapter into OpenClaw install directory...`)}`);
+                console.log(`  ${adapterSrc} → ${adapterDest}`);
+                try {
+                    if (process.platform === 'win32') {
+                        spawnSync('robocopy', [adapterSrc, adapterDest, '/E', '/NFL', '/NDL', '/NJH', '/NJS'], { stdio: 'inherit', shell: true });
+                    } else {
+                        spawnSync('sudo', ['cp', '-r', adapterSrc, adapterDest], { stdio: 'inherit' });
+                    }
+                    // コピー先のパーミッション修正（実行権限付与）
+                    if (process.platform !== 'win32') {
+                        spawnSync('sudo', ['chown', '-R', `${os.userInfo().username}`, adapterDest], { stdio: 'pipe' });
+                    }
+                    PLUGIN_DIR = adapterDest;
+                    GEMINI_CREDS_DIR = path.join(PLUGIN_DIR, 'gemini-home');
+                    console.log(`  ${C.green('DONE')} → 以降のセットアップは ${adapterDest} で行います`);
+                } catch (e) {
+                    console.log(`  ${C.yellow(`⚠ コピーに失敗しました: ${e.message}。元の場所で続行します。`)}`);
+                }
+            } else if (adapterSrc === adapterDest) {
+                console.log(`  ${C.green('✓')} アダプターはすでに OpenClaw インストール先にあります: ${adapterDest}`);
+                PLUGIN_DIR = adapterDest;
+            } else {
+                console.log(`  ${C.yellow('⚠ OpenClaw インストール先が見つかりませんでした。MCP ツールが動作しない可能性があります。')}`);
+            }
         }
     }
 

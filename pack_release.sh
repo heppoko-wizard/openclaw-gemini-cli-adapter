@@ -33,6 +33,7 @@ echo "Copying root level scripts and READMEs..."
 cp "$ADAPTER_DIR/setup-openclaw-gemini-cli-adapter.sh" "$STAGE_ROOT/setup-openclaw-gemini-cli-adapter.sh"
 cp "$ADAPTER_DIR/setup-openclaw-gemini-cli-adapter.bat" "$STAGE_ROOT/setup-openclaw-gemini-cli-adapter.bat"
 cp "$ADAPTER_DIR/interactive-setup.js" "$STAGE_ROOT/interactive-setup.js"
+cp "$ADAPTER_DIR/clean.sh" "$STAGE_ROOT/clean.sh"
 cp "$ADAPTER_DIR"/README*.md "$STAGE_ADAPTER/" 2>/dev/null || true
 
 # --- 2. Adapter internal files (plugin folder) ---
@@ -88,7 +89,7 @@ find "$STAGE_ADAPTER" -name "google_accounts.json" -delete 2>/dev/null || true
 find "$STAGE_ADAPTER" -name "installation_id" -delete 2>/dev/null || true
 
 # --- 3.5. Set execute permissions on shell scripts ---
-chmod +x "$STAGE_ROOT/setup-openclaw-gemini-cli-adapter.sh" 2>/dev/null || true
+chmod +x "$STAGE_ROOT/setup-openclaw-gemini-cli-adapter.sh" "$STAGE_ROOT/clean.sh" 2>/dev/null || true
 chmod +x "$STAGE_ADAPTER/start.sh" "$STAGE_ADAPTER/launch.sh" \
          "$STAGE_ADAPTER/stop.sh" "$STAGE_ADAPTER/relogin.sh" "$STAGE_ADAPTER/uninstall.sh" 2>/dev/null || true
 

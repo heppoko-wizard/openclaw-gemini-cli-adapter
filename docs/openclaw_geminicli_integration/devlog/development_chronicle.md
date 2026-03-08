@@ -703,5 +703,16 @@
 - `interactive-setup.js` — Tailscale デーモン起動ロジックの全面改修：PID 1 判定による systemd/非systemd 分岐、フォールバック起動、文字列マッチ修正、インストール後ガード追加
 
 #### 追加修正: pnpm グローバルインストールの権限エラー修正
-- **問題**: `npm install -g pnpm` が `sudo` なしで実行されていたため、`EACCES: permission denied, mkdir '/usr/lib/node_modules/pnpm'` でインストールに失敗し、OpenClaw のビルド（`pnpm canvas:a2ui:bundle` 等）が `pnpm: not found` で止まっていた。
-- **修正**: Linux/macOS では `sudo npm install -g pnpm` に変更。Windows では `sudo` なしで実行（UAC 対応）。
+- **問題**: `npm install -g pnpm` が `sudo` なしで実行されていたため、`EACCES: permission denied, mkdir '/usr/lib/node_modules/pnpm'` でインストールに失敗。
+- **修正**: Linux/macOS では `sudo npm install -g pnpm` に変更。
+
+## [2026-03-07] Session 30: OpenClaw のインストール方式をソースビルドからバイナリ版に変更
+- **背景**: OpenClaw v2026.3.2 のソースビルド時、上流パッケージ `@tloncorp/api` の依存バグにより `pnpm ui:build` が失敗し、Web UI アセットが生成されない問題（`Control UI assets not found`）が発生。
+- **解決策**: インストール方式を GitHub からのソース取得 + ビルドから、`npm install -g openclaw@latest` によるバイナリインストール方式に変更。
+- **効果**:
+  - **信頼性**: すでにビルド済みの UI アセットが同梱されているため、ユーザー環境でのビルド失敗が起こらない。
+  - **速度**: コンパイルや依存解決のステップが大幅に削減（10分以上かかることもあった処理が数十秒に短縮）。
+  - **互換性**: ネイティブバイナリも npm が OS に合わせて最適なものをダウンロードするため、WSL2 等の環境差異に強くなった。
+- **変更ファイル**:
+  - `interactive-setup.js`: インストールロジックを全面刷新。
+  - `launch.sh`: ソースビルド前提の UI チェックとビルドコマンド（`pnpm ui:build`）を削除。

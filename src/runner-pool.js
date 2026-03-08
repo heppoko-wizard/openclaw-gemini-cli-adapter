@@ -41,7 +41,7 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
     const baseDir = path.resolve(__dirname, '..');
     const isolatedHomeDir = path.join(baseDir, 'gemini-home');
     const isolatedGeminiDir = path.join(isolatedHomeDir, '.gemini');
-    
+
     if (!fs.existsSync(isolatedGeminiDir)) {
         fs.mkdirSync(isolatedGeminiDir, { recursive: true });
     }
@@ -49,7 +49,7 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
     for (const file of ['oauth_creds.json', 'google_accounts.json', 'installation_id']) {
         const src = path.join(baseDir, 'gemini-home', '.gemini', file);
         if (!fs.existsSync(src)) continue;
-        try { fs.copyFileSync(src, path.join(isolatedGeminiDir, file)); } catch (_) {}
+        try { fs.copyFileSync(src, path.join(isolatedGeminiDir, file)); } catch (_) { }
     }
 
     // 1. 隔離環境の settings.json を読み込み、openclaw-tools MCP を注入
@@ -59,7 +59,7 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
         if (fs.existsSync(settingsPath)) {
             userSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
         }
-    } catch (_) {}
+    } catch (_) { }
 
     userSettings.mcpServers = userSettings.mcpServers || {};
     // デバッグ用: stderr を logs/mcp.log にリダイレクトするシェルラッパーを一時的に復活
@@ -77,9 +77,9 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
     );
 
     // 2. 資格情報の存在チェック（警告用）
-    const hasCreds = fs.existsSync(path.join(isolatedGeminiDir, 'oauth_creds.json')) || 
-                    fs.existsSync(path.join(isolatedGeminiDir, 'google_accounts.json'));
-    
+    const hasCreds = fs.existsSync(path.join(isolatedGeminiDir, 'oauth_creds.json')) ||
+        fs.existsSync(path.join(isolatedGeminiDir, 'google_accounts.json'));
+
     if (!hasCreds) {
         console.warn(`[Pool] WARNING: No Gemini credentials found in ${isolatedGeminiDir}. Did you run setup.js / gemini login?`);
     }
@@ -94,13 +94,13 @@ class RunnerPool {
         this.readyRunner = null;
         this.pendingRequests = []; // Array of { request, resolve, reject }
         this.isSpawning = false;
-        
+
         // サーバー起動時に1度だけ openclaw.json から workspace を解決
         this.workspaceCwd = resolveOpenClawWorkspace();
-        
+
         // OpenClaw MCPツール入りの独立した GEMINI_CLI_HOME を準備
         this.isolatedGeminiHome = prepareIsolatedGeminiHome(this.workspaceCwd);
-        
+
         // サーバー起動と同時に事前起動（Warm up）開始
         this.spawnNewRunner();
     }
@@ -108,11 +108,11 @@ class RunnerPool {
     spawnNewRunner() {
         if (this.isSpawning) return;
         this.isSpawning = true;
-        
+
         console.log("[Pool] Spawning a new warm standby runner (Node.js)...");
         const runnerPath = path.resolve(__dirname, 'runner.mjs');
-        
-        const execCmd = 'node';
+
+        const execCmd = process.execPath;
 
         const runner = spawn(execCmd, [runnerPath, '--approval-mode=yolo', '--sandbox=false', '-o', 'stream-json'], {
             stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -122,12 +122,12 @@ class RunnerPool {
                 GEMINI_CLI_HOME: this.isolatedGeminiHome,
             }
         });
-        
+
         runner.once('message', (msg) => {
             if (msg.type === 'ready') {
                 this.isSpawning = false;
                 console.log("[Pool] Runner is ready to accept requests.");
-                
+
                 // キューに待たせているリクエストがあれば即時ひも付け
                 if (this.pendingRequests.length > 0) {
                     const req = this.pendingRequests.shift();
@@ -138,7 +138,7 @@ class RunnerPool {
                 }
             }
         });
-        
+
         runner.once('exit', (code, signal) => {
             // プロセスが終了（使い捨て完了）したら次のプロセスを補充する
             console.log(`[Pool] Runner consumed (exited with code ${code}, signal ${signal}). Spawning next...`);
@@ -177,16 +177,16 @@ class RunnerPool {
         const { request, resolve } = pendingReq;
         // Runnerにプロンプト実行の号令をかける
         console.log(`[Pool] Dispatching runner for session: ${request.resumedSessionData?.conversation?.sessionId || 'none'} (model: ${request.model || 'default'})`);
-        runner.send({ 
-            type: 'run', 
-            input: request.input, 
-            prompt_id: request.promptId, 
+        runner.send({
+            type: 'run',
+            input: request.input,
+            prompt_id: request.promptId,
             resumedSessionData: request.resumedSessionData,
             model: request.model,
             env: request.env,
             mediaPaths: request.mediaPaths
         });
-        
+
         // 呼び出し元（Streaming層）へ、入出力ストリームを持つRunnerプロセスを返す
         resolve(runner);
     }
