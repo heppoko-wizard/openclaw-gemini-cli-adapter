@@ -33,13 +33,13 @@ const SCOPES = [
 async function runAuth() {
     return new Promise((resolve, reject) => {
         const client = new OAuth2Client(CLIENT_ID, CLIENT_SECRET);
-        
+
         // ランダムなポートでローカルサーバーを起動
         const server = http.createServer();
         server.listen(0, '127.0.0.1', async () => {
             const port = server.address().port;
             const redirectUri = `http://127.0.0.1:${port}/oauth2callback`;
-            
+
             const state = crypto.randomBytes(32).toString('hex');
             const authUrl = client.generateAuthUrl({
                 redirect_uri: redirectUri,
@@ -55,7 +55,7 @@ async function runAuth() {
             server.on('request', async (req, res) => {
                 try {
                     const reqUrl = new url.URL(req.url, `http://127.0.0.1:${port}`);
-                    
+
                     if (reqUrl.pathname !== '/oauth2callback') {
                         res.writeHead(404);
                         res.end('Not Found');
@@ -85,22 +85,30 @@ async function runAuth() {
                     if (code) {
                         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end('<h1>認証成功！</h1><p>Gemini CLI の認証が完了しました。このタブ・ウィンドウは閉じて構いません。</p><script>window.close();</script>');
-                        
+
                         // トークンを取得
                         const { tokens } = await client.getToken({
                             code,
                             redirect_uri: redirectUri,
                         });
-                        
+
+                        // メールアドレスを取得して google_accounts.json にも保存する
+                        client.setCredentials(tokens);
+                        const { data } = await client.request({ url: 'https://www.googleapis.com/oauth2/v2/userinfo' });
+                        const email = data.email;
+
                         // GEMINI_CLI_HOME があればそこを優先、なければ os.homedir() の ~/.gemini に保存
                         const baseDir = process.env.GEMINI_CLI_HOME || os.homedir();
                         const targetDir = path.join(baseDir, '.gemini');
                         const targetPath = path.join(targetDir, 'oauth_creds.json');
+                        const acctsPath = path.join(targetDir, 'google_accounts.json');
+
                         if (!fs.existsSync(targetDir)) {
                             fs.mkdirSync(targetDir, { recursive: true });
                         }
                         fs.writeFileSync(targetPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
-                        
+                        fs.writeFileSync(acctsPath, JSON.stringify({ active: email, old: [] }, null, 2), { mode: 0o600 });
+
                         server.close();
                         resolve();
                     } else {
@@ -117,7 +125,7 @@ async function runAuth() {
                 }
             });
         });
-        
+
         server.on('error', (err) => {
             reject(err);
         });
