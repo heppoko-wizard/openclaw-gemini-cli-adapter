@@ -252,9 +252,20 @@ async function main() {
     const hasGogcli = gogBin.status === 0;
     let hasGogAuth = false;
     if (hasGogcli) {
-        hasGogAuth = spawnSync('gog', ['auth', 'status'], { shell: true }).status === 0;
+        try {
+            const listRes = spawnSync('gog', ['auth', 'list', '--json'], { shell: true });
+            if (listRes.status === 0) {
+                const listData = JSON.parse(listRes.stdout.toString());
+                hasGogAuth = listData.accounts && listData.accounts.length > 0;
+            }
+        } catch (e) {
+            hasGogAuth = false;
+        }
     }
     console.log(`  ${hasGogcli ? C.green(`${L().found} gog (gogcli - Google Workspace CLI)`) : C.yellow(`${L().not_found} gog ${lang === 'ja' ? '(任意・セットアップ中にインストール可能)' : '(optional - installable during setup)'}`)}`);
+    if (hasGogcli) {
+        console.log(`  ${hasGogAuth ? C.green(`${L().found} Google Workspace 認証`) : C.red(`${L().not_found} Google Workspace 認証 (gogcli)`)}`);
+    }
 
     // Tailscale
     const tsBin = spawnSync('tailscale', ['status'], { shell: true });
