@@ -84,6 +84,23 @@ else
     echo "  - ~/.openclaw/ は存在しません"
 fi
 
+# ---- [5] GWS CLI 認証情報の削除（任意） ----
+echo ""
+echo -e "${CYAN}[5/5] GWS CLI 認証情報の削除 (任意)${RESET}"
+GWS_DIR="$HOME/.config/gws"
+if [ -d "$GWS_DIR" ]; then
+    echo ""
+    read -p "  ~/.config/gws/ を削除しますか？ (y/N): " REMOVE_GWS
+    if [[ "$REMOVE_GWS" =~ ^[Yy]$ ]]; then
+        rm -rf "$GWS_DIR"
+        echo "  ✓ 削除: $GWS_DIR"
+    else
+        echo "  - スキップしました（GWS設定ファイルは保持されます）"
+    fi
+else
+    echo "  - ~/.config/gws/ は存在しません"
+fi
+
 echo ""
 echo -e "${BOLD}${GREEN}============================================================${RESET}"
 echo -e "${BOLD}${GREEN} クリーン完了！再インストールするには setup スクリプトを実行してください${RESET}"
