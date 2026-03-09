@@ -621,8 +621,8 @@ async function main() {
 
                     let email = '';
                     if (defaultEmail) {
-                        const ans = await promptUser(`連携するGoogleアカウント(Gmailアドレス等)を入力してください [Enterで "${defaultEmail}" を使用]:`);
-                        email = ans || defaultEmail;
+                        console.log(`  ${C.dim(`Gemini CLIの認証済みアカウント (${defaultEmail}) を検出しました。`)}`);
+                        email = defaultEmail;
                     } else {
                         email = await promptUser('連携するGoogleアカウント(Gmailアドレス等)を入力してください:');
                     }
