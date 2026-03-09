@@ -612,9 +612,14 @@ async function main() {
                     // まずGemini CLIの認証済みアカウントがあればそれをデフォルトとして使用します
                     let defaultEmail = '';
                     try {
-                        const acctsFile = path.join(GEMINI_CREDS_DIR, '.gemini', 'google_accounts.json');
-                        if (fs.existsSync(acctsFile)) {
-                            const accts = JSON.parse(fs.readFileSync(acctsFile, 'utf8'));
+                        const globalAccts = path.join(os.homedir(), '.gemini', 'google_accounts.json');
+                        const localAccts = path.join(GEMINI_CREDS_DIR, '.gemini', 'google_accounts.json');
+
+                        if (fs.existsSync(localAccts)) {
+                            const accts = JSON.parse(fs.readFileSync(localAccts, 'utf8'));
+                            if (accts.active) defaultEmail = accts.active;
+                        } else if (fs.existsSync(globalAccts)) {
+                            const accts = JSON.parse(fs.readFileSync(globalAccts, 'utf8'));
                             if (accts.active) defaultEmail = accts.active;
                         }
                     } catch (e) { }
