@@ -22,6 +22,7 @@ echo "  1. 実行中の Gateway / Adapter プロセスを停止"
 echo "  2. アダプターを npm グローバルの OpenClaw フォルダから削除"
 echo "  3. OpenClaw をグローバルアンインストール (sudo npm uninstall -g openclaw)"
 echo "  4. ~/.openclaw/ の設定ファイル削除 (任意)"
+echo "  5. ~/.config/gogcli/ の設定ファイル削除 (任意)"
 echo ""
 read -p "続行しますか？ (Enter で続行 / Ctrl+C でキャンセル)"
 
@@ -84,21 +85,21 @@ else
     echo "  - ~/.openclaw/ は存在しません"
 fi
 
-# ---- [5] GWS CLI 認証情報の削除（任意） ----
+# ---- [5] gogcli 認証情報の削除 (任意) ----
 echo ""
-echo -e "${CYAN}[5/5] GWS CLI 認証情報の削除 (任意)${RESET}"
-GWS_DIR="$HOME/.config/gws"
-if [ -d "$GWS_DIR" ]; then
+echo -e "${CYAN}[5/5] gogcli 認証情報の削除 (任意)${RESET}"
+GOG_DIR="$HOME/.config/gogcli"
+if [ -d "$GOG_DIR" ]; then
     echo ""
-    read -p "  ~/.config/gws/ を削除しますか？ (y/N): " REMOVE_GWS
-    if [[ "$REMOVE_GWS" =~ ^[Yy]$ ]]; then
-        rm -rf "$GWS_DIR"
-        echo "  ✓ 削除: $GWS_DIR"
+    read -p "  ~/.config/gogcli/ を削除しますか？ (y/N): " REMOVE_GOG
+    if [[ "$REMOVE_GOG" =~ ^[Yy]$ ]]; then
+        rm -rf "$GOG_DIR"
+        echo "  ✓ 削除: $GOG_DIR"
     else
-        echo "  - スキップしました（GWS設定ファイルは保持されます）"
+        echo "  - スキップしました（gogcli設定ファイルは保持されます）"
     fi
 else
-    echo "  - ~/.config/gws/ は存在しません"
+    echo "  - ~/.config/gogcli/ は存在しません"
 fi
 
 echo ""
