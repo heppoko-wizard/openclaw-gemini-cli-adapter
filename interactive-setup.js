@@ -598,7 +598,12 @@ async function main() {
                     const email = 'default@openclaw';
                     console.log(`  ${C.dim('ブラウザが開きます。連携したいGoogleアカウントを選択してください。')}`);
 
-                    const authArgs = ['auth', 'add', email, '--services=all', '--force-consent'];
+                    const authArgs = [
+                        'auth', 'add', email,
+                        'calendar', 'docs', 'sheets', 'tasks', 'people', 'chat',
+                        '--extra-scopes', 'https://www.googleapis.com/auth/drive.appdata,https://www.googleapis.com/auth/drive.file,https://www.googleapis.com/auth/userinfo.profile',
+                        '--force-consent'
+                    ];
                     await new Promise((resolve) => {
                         // ★ pipeでURLをキャプチャし、短縮リダイレクトサーバーを起動 ★
                         const child = spawn('gog', authArgs, {
