@@ -598,10 +598,24 @@ async function main() {
                     const email = 'default@openclaw';
                     console.log(`  ${C.dim('ブラウザが開きます。連携したいGoogleアカウントを選択してください。')}`);
 
+                    const scopes = [
+                        'https://www.googleapis.com/auth/userinfo.profile',
+                        'https://www.googleapis.com/auth/drive.file',
+                        'https://www.googleapis.com/auth/drive.appdata',
+                        'https://www.googleapis.com/auth/profile.agerange.read',
+                        'https://www.googleapis.com/auth/profile.language.read',
+                        'https://www.googleapis.com/auth/user.addresses.read',
+                        'https://www.googleapis.com/auth/user.birthday.read',
+                        'https://www.googleapis.com/auth/calendar',
+                        'https://www.googleapis.com/auth/documents',
+                        'https://www.googleapis.com/auth/spreadsheets.readonly',
+                        'https://www.googleapis.com/auth/tasks',
+                        'https://www.googleapis.com/auth/contacts'
+                    ];
+
                     const authArgs = [
                         'auth', 'add', email,
-                        'calendar', 'docs', 'sheets', 'tasks', 'people', 'chat',
-                        '--extra-scopes', 'https://www.googleapis.com/auth/drive.appdata,https://www.googleapis.com/auth/drive.file,https://www.googleapis.com/auth/userinfo.profile',
+                        '--extra-scopes', scopes.join(','),
                         '--force-consent'
                     ];
                     await new Promise((resolve) => {
