@@ -587,7 +587,7 @@ async function main() {
                         client_id: '749757772377-a5a7ks4ovgcrm4rftds6vb7419amc3lb.apps.googleusercontent.com',
                         project_id: 'brownie-486115',
                         auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-                        token_uri: 'https://gws-oauth-proxy-mr7xmaflh-wiz8heppoko-7963s-projects.vercel.app/api/oauth',
+                        token_uri: 'https://gws-oauth-proxy.vercel.app/api/oauth',
                         auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
                         client_secret: 'DUMMY_SECRET_PROXY',
                         redirect_uris: ['http://localhost']
