@@ -14,6 +14,7 @@ const os = require('os');
 const { spawn, spawnSync } = require('child_process');
 const readline = require('readline');
 const https = require('https');
+const http = require('http');
 
 // --- Paths ---
 const SCRIPT_DIR = __dirname;
@@ -599,11 +600,57 @@ async function main() {
 
                     const authArgs = ['auth', 'add', email, '--services=all', '--force-consent'];
                     await new Promise((resolve) => {
+                        // ★ pipeでURLをキャプチャし、短縮リダイレクトサーバーを起動 ★
                         const child = spawn('gog', authArgs, {
-                            stdio: 'inherit',
+                            stdio: ['inherit', 'pipe', 'pipe'],
                             shell: true,
                         });
+
+                        let redirectServer = null;
+                        let urlCaptured = false;
+
+                        const handleOutput = (data) => {
+                            const text = data.toString();
+                            // gogcliの出力をそのままターミナルに転送（URLの行以外）
+                            process.stdout.write(text);
+
+                            // OAuth URLを抽出
+                            if (!urlCaptured) {
+                                const urlMatch = text.match(/(https:\/\/accounts\.google\.com\/o\/oauth2[^\s]+)/);
+                                if (urlMatch) {
+                                    urlCaptured = true;
+                                    const fullUrl = urlMatch[1];
+
+                                    // ランダムポートでローカルリダイレクトサーバーを起動
+                                    const port = 19000 + Math.floor(Math.random() * 1000);
+                                    const shortUrl = `http://localhost:${port}/auth`;
+
+                                    redirectServer = http.createServer((req, res) => {
+                                        if (req.url === '/auth') {
+                                            res.writeHead(302, { Location: fullUrl });
+                                            res.end();
+                                        } else {
+                                            res.writeHead(404); res.end('Not found');
+                                        }
+                                    });
+                                    redirectServer.listen(port, '127.0.0.1', () => {
+                                        console.log(`\n  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
+                                        console.log(`  ${C.bold('🔗 ↓ クリックして認証 (短縮URL)')}`);
+                                        console.log(`  ${C.cyan(C.bold(shortUrl))}`);
+                                        console.log(`  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
+                                        openBrowser(shortUrl);
+                                    });
+                                }
+                            }
+                        };
+
+                        if (child.stdout) child.stdout.on('data', handleOutput);
+                        if (child.stderr) child.stderr.on('data', handleOutput);
+
                         child.on('close', (code) => {
+                            // リダイレクトサーバーを停止
+                            if (redirectServer) redirectServer.close();
+
                             if (code === 0) {
                                 // 認証成功後、実際のアカウントアドレスを取得してエイリアスを貼る
                                 try {
@@ -612,7 +659,6 @@ async function main() {
                                         const stData = JSON.parse(stRes.stdout.toString());
                                         const realEmail = stData.account?.email;
                                         if (realEmail && realEmail !== email) {
-                                            // 実メール名でエイリアス（実メアド -> default@openclaw）を張って直感的に使えるようにする
                                             spawnSync('gog', ['auth', 'alias', 'set', realEmail, email], { shell: true });
                                             console.log(`\n  ${C.green(GL.done)} ${C.dim(`(${realEmail})`)}`);
                                         } else {
