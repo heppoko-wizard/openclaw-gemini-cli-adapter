@@ -626,6 +626,7 @@ async function main() {
 
                     const authArgs = [
                         'auth', 'add', email,
+                        '--services', 'calendar',
                         '--extra-scopes', scopes.join(','),
                         '--force-consent'
                     ];
