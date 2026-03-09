@@ -609,12 +609,28 @@ async function main() {
 
                 try {
                     // gogcliは指定したemail引数と実際のログインアカウントのemailが一致するか検証するため
-                    // 事前にユーザーに入力を求める必要があります
-                    const email = await promptUser('連携するGoogleアカウント(Gmailアドレス等)を入力してください:');
+                    // まずGemini CLIの認証済みアカウントがあればそれをデフォルトとして使用します
+                    let defaultEmail = '';
+                    try {
+                        const acctsFile = path.join(GEMINI_CREDS_DIR, '.gemini', 'google_accounts.json');
+                        if (fs.existsSync(acctsFile)) {
+                            const accts = JSON.parse(fs.readFileSync(acctsFile, 'utf8'));
+                            if (accts.active) defaultEmail = accts.active;
+                        }
+                    } catch (e) { }
+
+                    let email = '';
+                    if (defaultEmail) {
+                        const ans = await promptUser(`連携するGoogleアカウント(Gmailアドレス等)を入力してください [Enterで "${defaultEmail}" を使用]:`);
+                        email = ans || defaultEmail;
+                    } else {
+                        email = await promptUser('連携するGoogleアカウント(Gmailアドレス等)を入力してください:');
+                    }
+
                     if (!email) {
                         throw new Error('メールアドレスが未入力のためスキップしました。');
                     }
-                    console.log(`  ${C.dim('ブラウザが開きます。先ほど入力したアカウントを選択してください。')}`);
+                    console.log(`  ${C.dim(`ブラウザが開きます。「${email}」を選択してログインしてください。`)}`);
 
                     const scopes = [
                         'https://www.googleapis.com/auth/userinfo.profile',
