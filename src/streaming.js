@@ -227,7 +227,8 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                         break;
 
                     case 'tool_use':
-                        // ツール使用開始の通知（プレースホルダー的なUI用）
+                        // ツール使用開始の通知（UX用）
+                        // SSoT化により履歴汚染の懸念は解消されたため、進捗表示を維持
                         sseWrite(res, {
                             id: responseId,
                             object: 'chat.completion.chunk',
@@ -242,10 +243,8 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                         break;
 
                     case 'tool_result': {
-                        // ツール実行結果の通知
-                        // status が 'success' かつ error がない場合のみ成功とみなす。
-                        // run_shell_command は Exit Code 非ゼロでも status=success を返すため、
-                        // error フィールドと exitCode を併せてチェックする。
+                        // ツール実行結果の通知（UX用）
+                        // SSoT化により履歴汚染の懸念は解消されたため、結果表示を維持
                         const isSuccess = json.status === 'success' && !json.error;
                         const statusIcon = isSuccess ? '✅' : '❌';
                         let toolMsg;

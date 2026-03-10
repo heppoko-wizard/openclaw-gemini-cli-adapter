@@ -9,12 +9,84 @@
  * (runEmbeddedPiAgent) to Google's Gemini CLI tool.
  */
 
-const fs   = require('fs');
+const fs = require('fs');
 const http = require('http');
-const { log, randomId } = require('./utils');
-const { extractText, convertToGeminiMessages } = require('./converter');
-const { loadSessionMap, saveSessionMap, overwriteSessionHistory } = require('./session');
+const { log, randomId, sseWrite } = require('./utils');
+const { extractText } = require('./converter');
+const { loadSessionMap, saveSessionMap } = require('./session');
 const { prepareGeminiEnv, runGeminiStreaming } = require('./streaming');
+
+// ---------------------------------------------------------------------------
+// Summarization intercept
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect if the incoming request is a summarization/compaction request from
+ * the OpenClaw Gateway.  These requests carry a distinctive system prompt and
+ * XML-like tags that we can match with high confidence.
+ *
+ * Returning true means "this is a summarization request — do NOT forward it
+ * to Gemini CLI; reply with a canned summary instead".
+ */
+function isSummarizationRequest(systemPrompt, userText) {
+    // Primary signal: the system prompt used by pi-coding-agent's compaction module
+    if (systemPrompt && systemPrompt.includes('You are a context summarization assistant')) {
+        return true;
+    }
+    // Secondary signal: XML tags wrapping serialized conversation history
+    if (userText && userText.includes('<conversation>') && (
+        userText.includes('<previous-summary>') ||
+        userText.includes('## Goal') ||
+        userText.includes('structured context checkpoint summary')
+    )) {
+        return true;
+    }
+    // Tertiary: text_to_summarize tag (used by summarizeText)
+    if (userText && userText.includes('<text_to_summarize>')) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Send a canned summarization response so OpenClaw believes the summary
+ * succeeded, while the real context is safely managed by Gemini CLI's own
+ * compaction / <state_snapshot> mechanism.
+ */
+function sendFakeSummaryResponse(res, requestId, stream) {
+    const summary = `## Goal\nContinuing the current task as directed by the user.\n\n## Constraints & Preferences\n- (managed by the agent\'s internal memory)\n\n## Progress\n### Done\n- [x] Previous context has been preserved by the agent\'s native memory management.\n\n### In Progress\n- [ ] Awaiting next user instruction.\n\n## Key Decisions\n- Context compaction is handled internally by the agent.\n\n## Next Steps\n1. Continue with the user\'s next request.\n\n## Critical Context\n- Full conversation history is maintained by the agent\'s session.`;
+
+    if (stream) {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        });
+        sseWrite(res, {
+            id: `chatcmpl-${requestId}`,
+            object: 'chat.completion.chunk',
+            created: Math.floor(Date.now() / 1000),
+            model: 'gemini',
+            choices: [{ index: 0, delta: { role: 'assistant', content: summary }, finish_reason: null }]
+        });
+        sseWrite(res, {
+            id: `chatcmpl-${requestId}`,
+            object: 'chat.completion.chunk',
+            created: Math.floor(Date.now() / 1000),
+            model: 'gemini',
+            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }]
+        });
+        res.write('data: [DONE]\n\n');
+        res.end();
+    } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            id: `chatcmpl-${requestId}`,
+            object: 'chat.completion',
+            choices: [{ index: 0, message: { role: 'assistant', content: summary }, finish_reason: 'stop' }],
+        }));
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Config
@@ -55,7 +127,7 @@ const server = http.createServer(async (req, res) => {
     // Models endpoint (OpenClaw probes this)
     if (req.method === 'GET' && (url.pathname === '/v1/models' || url.pathname === '/models')) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        
+
         let modelsList = [{ id: 'gemini', object: 'model', owned_by: 'google' }];
         try {
             const core = require('@google/gemini-cli-core');
@@ -97,11 +169,11 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        const messages    = body.messages || body.input || [];
-        const stream      = body.stream !== false;
-        const sessionKey  = body._openclawSessionKey || body._sessionId || 'default';
+        const messages = body.messages || body.input || [];
+        const stream = body.stream !== false;
+        const sessionKey = body._openclawSessionKey || body._sessionId || 'default';
         const workspaceDir = body._workspaceDir || process.cwd();
-        
+
         let reqModel = body.model || 'auto-gemini-3';
         if (reqModel === 'auto' || reqModel === 'gemini') {
             reqModel = 'auto-gemini-3';
@@ -141,6 +213,24 @@ const server = http.createServer(async (req, res) => {
         const historyMessages = lastUserIdx > 0 ? messages.slice(0, lastUserIdx) : [];
         const promptText = lastUserText.replace(/\[media attached[^\]]*\]/gi, '').trim();
 
+        const requestId = randomId();
+
+        // ---------------------------------------------------------------
+        // Summarization intercept (SSoT guard)
+        // ---------------------------------------------------------------
+        // OpenClaw may ask the LLM to summarize conversation history.
+        // Forwarding this to Gemini CLI would be wasteful and dangerous:
+        //   - Gemini CLI manages its own context compaction (<state_snapshot>)
+        //   - The summarized text would become the new "history", destroying
+        //     the real toolCalls / execution records in Gemini's session JSON.
+        // Instead, we return a canned summary so OpenClaw is satisfied,
+        // while Gemini CLI's memory (the SSoT) remains untouched.
+        if (isSummarizationRequest(systemPrompt, promptText)) {
+            log(`[intercept] Summarization request detected — returning canned summary (SSoT protection)`);
+            sendFakeSummaryResponse(res, requestId, stream);
+            return;
+        }
+
         // Set up Gemini environment
         let env, chatsDir, tempSystemMdPath;
         try {
@@ -152,27 +242,10 @@ const server = http.createServer(async (req, res) => {
         }
 
         // Look up existing Gemini session ID for this OpenClaw session
+        // SSoT: We NO LONGER overwrite Gemini's session with client history.
+        // Gemini CLI's own session JSON is the single source of truth.
         const sessionMap = loadSessionMap();
         let geminiSessionId = sessionMap[sessionKey] || null;
-
-        // If we have an existing Gemini session AND history, overwrite its messages
-        if (geminiSessionId && historyMessages.length > 0) {
-            try {
-                const newMessages = convertToGeminiMessages(historyMessages);
-                const ok = overwriteSessionHistory(chatsDir, geminiSessionId, newMessages);
-                if (ok) {
-                    log(`overwrote session ${geminiSessionId} with ${historyMessages.length} pruned msgs`);
-                } else {
-                    log(`session file for ${geminiSessionId} not found — starting fresh`);
-                    geminiSessionId = null;
-                }
-            } catch (e) {
-                log(`Failed to overwrite session: ${e.message} — starting fresh`);
-                geminiSessionId = null;
-            }
-        }
-
-        const requestId = randomId();
         log(`Selected model: ${reqModel}`);
 
         if (stream) {
@@ -195,7 +268,7 @@ const server = http.createServer(async (req, res) => {
                         abortHandle.kill();
                     }
                 }
-                try { fs.rmSync(tempSystemMdPath); } catch (_) {}
+                try { fs.rmSync(tempSystemMdPath); } catch (_) { }
             });
 
             abortHandle = await runGeminiStreaming({
@@ -226,7 +299,7 @@ const server = http.createServer(async (req, res) => {
                         try {
                             const ev = JSON.parse(line.slice(6));
                             fullText += ev.choices?.[0]?.delta?.content || '';
-                        } catch (_) {}
+                        } catch (_) { }
                     }
                 },
                 end: () => {
@@ -236,9 +309,9 @@ const server = http.createServer(async (req, res) => {
                         object: 'chat.completion',
                         choices: [{ index: 0, message: { role: 'assistant', content: fullText }, finish_reason: 'stop' }],
                     }));
-                    try { fs.rmSync(tempSystemMdPath); } catch (_) {}
+                    try { fs.rmSync(tempSystemMdPath); } catch (_) { }
                 },
-                on: () => {},
+                on: () => { },
             };
             runGeminiStreaming({
                 prompt: promptText,
