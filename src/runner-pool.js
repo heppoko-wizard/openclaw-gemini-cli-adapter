@@ -70,6 +70,18 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
         trust: true
     };
 
+    // 信頼フォルダの登録: config.js L426-428 では trustedFolder=false の場合に
+    // --approval-mode=yolo が強制的に DEFAULT に落とされ run_shell_command が無効化される。
+    // ワークスペースと隔離ホームを両方信頼リストに追加して YOLO モードを維持する。
+    userSettings.security = userSettings.security || {};
+    userSettings.security.folderTrust = userSettings.security.folderTrust || {};
+    const existingTrusted = userSettings.security.folderTrust.trustedFolders || [];
+    userSettings.security.folderTrust.trustedFolders = Array.from(new Set([
+        ...existingTrusted,
+        workspaceCwd,
+        isolatedHomeDir,
+    ]));
+
     fs.writeFileSync(
         settingsPath,
         JSON.stringify(userSettings, null, 2),
