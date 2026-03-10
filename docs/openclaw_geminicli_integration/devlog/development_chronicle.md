@@ -716,3 +716,24 @@
 - **変更ファイル**:
   - `interactive-setup.js`: インストールロジックを全面刷新。
   - `launch.sh`: ソースビルド前提の UI チェックとビルドコマンド（`pnpm ui:build`）を削除。
+
+---
+
+## [2026-03-10] Session 31: 認証フローのサイレント失敗とパス不整合の修正
+
+### やったこと
+- **課題**: `interactive-setup.js` 実行中、Gemini CLI の認証フロー（ブラウザでのGoogleログイン）において、ユーザーがブラウザで認証を完了する前にスクリプトが次のステップへ進んでしまい、`google_accounts.json` や `oauth_creds.json` がグローバルパスに正しく保存されない・または生成がスキップされる問題が発生した。
+- **原因1 (早期終了)**: `interactive-setup.js` から `setup-gemini-auth.js` を `spawn` する際、`stdio: 'inherit'` を指定していた。親プロセスで `pressEnter()` により `readline`（stdin）がクローズされたあと、不整合な stdin 状態が子プロセスに継承され、ブラウザ起動時のプロセス生成等で影響を受けて `setup-gemini-auth.js` が異常終了していた。
+- **原因2 (フォールバックの暴発)**: `setup-gemini-auth.js` 内で `GEMINI_CLI_HOME` が未設定の場合に `os.homedir()` (`~/.gemini/`) へフォールバックするロジックが残存しており、異常なタイミングで実行された際に意図しない場所へクレデンシャルが保存されていた。
+- **解決策**:
+  - `interactive-setup.js` 側の `spawn` オプションを `stdio: ['ignore', 'inherit', 'inherit']` に変更し、子プロセスを親の stdin の状態から完全に切り離した。これにより認証サーバーがコールバックを正常に待ち続けるようになった。
+  - `setup-gemini-auth.js` 内の `os.homedir()` へのフォールバックを削除し、`GEMINI_CLI_HOME` が未設定の場合は即座にエラーをスローして設計上のガードレールを強化した。
+  - `setup-gemini-auth.js` での `google_accounts.json` 生成時に発生するユーザー情報取得APIの失敗が `oauth_creds.json` の保存処理ブロック全体を道連れにしないよう、独立した `try-catch` に分離。処理成功時にはそれぞれの保存先絶対パスを `console.log` で明示的に出力するようにした。
+
+### 気付き・学んだこと
+- **stdin 継承の罠**: Node.js における対話型スクリプト間で `spawn` を繋ぐ際、親が `readline.close()` を呼んだ直後の不安定な stdin を `inherit` すると、子プロセスが謎の終了（Silent Exit）を引き起こすことがある。入力が不要な子プロセスには明示的に `ignore` を設定することが安全。
+- **意図せぬフォールバックの排除**: 「もし環境変数がなかったらローカルに保存する」という親切設計が、ポータブルな隔離環境（グローバルインストール等）を維持する上では「バグを隠蔽して間違った場所に書き込む」最悪の原因となる。ポータビリティを担保するには Fail-Fast（早々にエラーにする）設計が不可欠。
+
+### 変更したファイル
+- `interactive-setup.js` — `setup-gemini-auth.js` 呼び出し時の `stdio` を `['ignore', 'inherit', 'inherit']` に変更
+- `scripts/setup-gemini-auth.js` — フォールバックの削除、保存処理の `try-catch` 分離、明示的なログ出力の追加

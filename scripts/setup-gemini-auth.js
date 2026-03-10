@@ -86,19 +86,14 @@ async function runAuth() {
                         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end('<h1>認証成功！</h1><p>Gemini CLI の認証が完了しました。このタブ・ウィンドウは閉じて構いません。</p><script>window.close();</script>');
 
-                        // トークンを取得
-                        const { tokens } = await client.getToken({
-                            code,
-                            redirect_uri: redirectUri,
-                        });
-
-                        // メールアドレスを取得して google_accounts.json にも保存する
-                        client.setCredentials(tokens);
-                        const { data } = await client.request({ url: 'https://www.googleapis.com/oauth2/v2/userinfo' });
-                        const email = data.email;
-
-                        // GEMINI_CLI_HOME があればそこを優先、なければ os.homedir() の ~/.gemini に保存
-                        const baseDir = process.env.GEMINI_CLI_HOME || os.homedir();
+                        // GEMINI_CLI_HOME が必須。未設定の場合はエラー
+                        const baseDir = process.env.GEMINI_CLI_HOME;
+                        if (!baseDir) {
+                            const err = new Error('GEMINI_CLI_HOME が設定されていません。このスクリプトは interactive-setup.js 経由で実行してください。');
+                            reject(err);
+                            server.close();
+                            return;
+                        }
                         const targetDir = path.join(baseDir, '.gemini');
                         const targetPath = path.join(targetDir, 'oauth_creds.json');
                         const acctsPath = path.join(targetDir, 'google_accounts.json');
@@ -106,8 +101,44 @@ async function runAuth() {
                         if (!fs.existsSync(targetDir)) {
                             fs.mkdirSync(targetDir, { recursive: true });
                         }
-                        fs.writeFileSync(targetPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
-                        fs.writeFileSync(acctsPath, JSON.stringify({ active: email, old: [] }, null, 2), { mode: 0o600 });
+
+                        // トークンを取得
+                        let tokens;
+                        try {
+                            const result = await client.getToken({
+                                code,
+                                redirect_uri: redirectUri,
+                            });
+                            tokens = result.tokens;
+                        } catch (tokenErr) {
+                            console.error(`\n  [ERROR] トークン取得失敗: ${tokenErr.message}`);
+                            reject(tokenErr);
+                            server.close();
+                            return;
+                        }
+
+                        // oauth_creds.json を保存
+                        try {
+                            fs.writeFileSync(targetPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+                            console.log(`\n  ✓ oauth_creds.json を保存: ${targetPath}`);
+                        } catch (writeErr) {
+                            console.error(`\n  [ERROR] oauth_creds.json の書き込みに失敗: ${writeErr.message}`);
+                            reject(writeErr);
+                            server.close();
+                            return;
+                        }
+
+                        // メールアドレスを取得して google_accounts.json にも保存する
+                        try {
+                            client.setCredentials(tokens);
+                            const { data } = await client.request({ url: 'https://www.googleapis.com/oauth2/v2/userinfo' });
+                            const email = data.email;
+                            fs.writeFileSync(acctsPath, JSON.stringify({ active: email, old: [] }, null, 2), { mode: 0o600 });
+                            console.log(`  ✓ google_accounts.json を保存: ${acctsPath} (${email})`);
+                        } catch (acctErr) {
+                            console.error(`\n  [WARN] google_accounts.json の書き込みに失敗しました: ${acctErr.message}`);
+                            // 致命的ではないので続行する
+                        }
 
                         server.close();
                         resolve();

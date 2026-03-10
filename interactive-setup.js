@@ -188,10 +188,28 @@ function openBrowser(url) {
     try { exec(cmd); } catch { }
 }
 
+function getOpenclawAdapterDir() {
+    if (!isOpenclawPresent()) return null;
+    const npmRootResult = spawnSync('npm', ['root', '-g'], { encoding: 'utf-8' });
+    const npmRoot = npmRootResult.stdout?.trim();
+    if (npmRoot) {
+        const p = path.join(npmRoot, 'openclaw', 'openclaw-gemini-cli-adapter');
+        if (fs.existsSync(p)) return p;
+    }
+    return null;
+}
+
 function hasCredentials() {
-    return ['oauth_creds.json', 'google_accounts.json'].every(f =>
-        fs.existsSync(path.join(GEMINI_CREDS_DIR, '.gemini', f))
+    const checkDir = (dir) => ['oauth_creds.json', 'google_accounts.json'].every(f =>
+        fs.existsSync(path.join(dir, '.gemini', f))
     );
+    if (checkDir(GEMINI_CREDS_DIR)) return true;
+
+    // Check if integrated with OpenClaw
+    const openclawDir = getOpenclawAdapterDir();
+    if (openclawDir && checkDir(path.join(openclawDir, 'gemini-home'))) return true;
+
+    return false;
 }
 
 function isOpenclawPresent() {
@@ -205,6 +223,10 @@ function isOpenclawBuilt() {
 }
 
 // ========== Main ==========
+
+function getGogEnv() {
+    return { ...process.env, XDG_CONFIG_HOME: path.join(GEMINI_CREDS_DIR, '.config') };
+}
 
 async function main() {
     clear();
@@ -243,7 +265,13 @@ async function main() {
     else if (!ocBuilt) checks.push({ key: 'openclaw_build', label: 'OpenClaw (ビルド / Build)' });
 
     // Adapter deps
-    const hasDeps = fs.existsSync(path.join(PLUGIN_DIR, 'node_modules'));
+    let hasDeps = fs.existsSync(path.join(PLUGIN_DIR, 'node_modules'));
+    if (!hasDeps) {
+        const openclawDir = getOpenclawAdapterDir();
+        if (openclawDir) {
+            hasDeps = fs.existsSync(path.join(openclawDir, 'node_modules'));
+        }
+    }
     console.log(`  ${hasDeps ? C.green(`${L().found} アダプタ依存関係`) : C.red(`${L().not_found} アダプタ依存関係`)}`);
     if (!hasDeps) checks.push({ key: 'deps', label: 'Gemini CLI アダプタ依存関係 (npm install)' });
 
@@ -253,12 +281,12 @@ async function main() {
     if (!hasAuth) checks.push({ key: 'auth', label: 'Gemini CLI 認証 (Google ログイン)' });
 
     // Google Workspace (gogcli)
-    const gogBin = spawnSync('gog', ['--version'], { shell: true });
+    const gogBin = spawnSync('gog', ['--version'], { shell: true, env: getGogEnv() });
     const hasGogcli = gogBin.status === 0;
     let hasGogAuth = false;
     if (hasGogcli) {
         try {
-            const listRes = spawnSync('gog', ['auth', 'list', '--json'], { shell: true });
+            const listRes = spawnSync('gog', ['auth', 'list', '--json'], { shell: true, env: getGogEnv() });
             if (listRes.status === 0) {
                 const listData = JSON.parse(listRes.stdout.toString());
                 hasGogAuth = listData.accounts && listData.accounts.length > 0;
@@ -437,7 +465,7 @@ async function main() {
     // (gws方式に移行したため、extension-enablement.json の書き換えは不要)
 
     // ─── 5. Gemini 認証 (同じターミナル内) ───
-    if (!hasAuth) {
+    if (!hasCredentials()) {
         console.log(`\n  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
         console.log(`  ${C.bold(L().auth_title)}`);
         console.log(`  ${C.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}`);
@@ -456,7 +484,7 @@ async function main() {
                             ...process.env,
                             GEMINI_CLI_HOME: GEMINI_CREDS_DIR
                         },
-                        stdio: 'inherit',
+                        stdio: ['ignore', 'inherit', 'inherit'],
                         shell: false
                     });
 
@@ -578,13 +606,13 @@ async function main() {
             }
 
             // Step 2: gogcli 認証（Vercelプロキシ用 client_secret.json を自動配置）
-            const gogVerify = spawnSync('gog', ['--version'], { shell: true });
+            const gogVerify = spawnSync('gog', ['--version'], { shell: true, env: getGogEnv() });
             if (gogVerify.status === 0) {
                 console.log(`\n  ${C.cyan(GL.auth_start)}`);
 
                 // ★ デスクトップアプリ用シークレットJSONを自動配置 ★
                 // (Desktop AppタイプのOAuthクライアントはシークレットが公開されてもセキュリティ上問題ありません)
-                const GOG_CONFIG_DIR = path.join(os.homedir(), '.config', 'gogcli');
+                const GOG_CONFIG_DIR = path.join(GEMINI_CREDS_DIR, '.config', 'gogcli');
                 const GOG_CREDS_FILE = path.join(GOG_CONFIG_DIR, 'client_secret.json');
                 const proxyClientSecret = {
                     installed: {
@@ -602,7 +630,7 @@ async function main() {
                     fs.writeFileSync(GOG_CREDS_FILE, JSON.stringify(proxyClientSecret, null, 2));
                     console.log(`  ${C.dim(`✓ Vercelプロキシ用 client_secret.json を配置しました: ${GOG_CREDS_FILE}`)}`);
                     // gogcli にクレデンシャルを登録
-                    spawnSync('gog', ['auth', 'credentials', GOG_CREDS_FILE], { shell: true });
+                    spawnSync('gog', ['auth', 'credentials', GOG_CREDS_FILE], { shell: true, env: getGogEnv() });
                 } catch (e) {
                     console.log(`  ${C.yellow(`client_secret.json の配置に失敗: ${e.message}`)}`);
                 }
@@ -612,11 +640,17 @@ async function main() {
                     // まずGemini CLIの認証済みアカウントがあればそれをデフォルトとして使用します
                     let defaultEmail = '';
                     try {
-                        const localAccts = path.join(GEMINI_CREDS_DIR, '.gemini', 'google_accounts.json');
+                        const localAccts1 = path.join(GEMINI_CREDS_DIR, '.gemini', 'google_accounts.json');
+                        const localAccts2 = path.join(GEMINI_CREDS_DIR, 'google_accounts.json');
 
-                        if (fs.existsSync(localAccts)) {
-                            const accts = JSON.parse(fs.readFileSync(localAccts, 'utf8'));
-                            if (accts.active) defaultEmail = accts.active;
+                        for (const localAccts of [localAccts1, localAccts2]) {
+                            if (fs.existsSync(localAccts)) {
+                                const accts = JSON.parse(fs.readFileSync(localAccts, 'utf8'));
+                                if (accts.active && accts.active !== 'null') {
+                                    defaultEmail = accts.active;
+                                    break;
+                                }
+                            }
                         }
                     } catch (e) { }
 
@@ -657,21 +691,22 @@ async function main() {
                     await new Promise((resolve) => {
                         // ★ pipeでURLをキャプチャし、短縮リダイレクトサーバーを起動 ★
                         const child = spawn('gog', authArgs, {
-                            stdio: ['inherit', 'pipe', 'pipe'],
+                            stdio: ['ignore', 'pipe', 'pipe'],
                             shell: true,
+                            env: getGogEnv()
                         });
 
                         let redirectServer = null;
                         let urlCaptured = false;
+                        let outputBuffer = '';
 
                         const handleOutput = (data) => {
                             const text = data.toString();
-                            // gogcliの出力をそのままターミナルに転送（URLの行以外）
-                            process.stdout.write(text);
+                            outputBuffer += text;
 
                             // OAuth URLを抽出
                             if (!urlCaptured) {
-                                const urlMatch = text.match(/(https:\/\/accounts\.google\.com\/o\/oauth2[^\s]+)/);
+                                const urlMatch = outputBuffer.match(/(https:\/\/accounts\.google\.com\/o\/oauth2[^\s"]+)/);
                                 if (urlMatch) {
                                     urlCaptured = true;
                                     const fullUrl = urlMatch[1];
@@ -709,12 +744,12 @@ async function main() {
                             if (code === 0) {
                                 // 認証成功後、実際のアカウントアドレスを取得してエイリアスを貼る
                                 try {
-                                    const stRes = spawnSync('gog', ['auth', 'status', '--json'], { shell: true });
+                                    const stRes = spawnSync('gog', ['auth', 'status', '--json'], { shell: true, env: getGogEnv() });
                                     if (stRes.status === 0) {
                                         const stData = JSON.parse(stRes.stdout.toString());
                                         const realEmail = stData.account?.email;
                                         if (realEmail && realEmail !== email) {
-                                            spawnSync('gog', ['auth', 'alias', 'set', realEmail, email], { shell: true });
+                                            spawnSync('gog', ['auth', 'alias', 'set', realEmail, email], { shell: true, env: getGogEnv() });
                                             console.log(`\n  ${C.green(GL.done)} ${C.dim(`(${realEmail})`)}`);
                                         } else {
                                             console.log(`\n  ${C.green(GL.done)}`);
