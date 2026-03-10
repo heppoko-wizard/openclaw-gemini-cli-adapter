@@ -128,6 +128,9 @@ class RunnerPool {
             env: {
                 ...process.env,
                 GEMINI_CLI_HOME: this.isolatedGeminiHome,
+                XDG_CONFIG_HOME: path.join(this.isolatedGeminiHome, '.config'),
+                GOG_KEYRING_BACKEND: 'file',
+                GOG_KEYRING_PASSWORD: 'openclaw-adapter',
             }
         });
 
