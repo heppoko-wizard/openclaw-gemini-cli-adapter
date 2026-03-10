@@ -733,7 +733,9 @@
 ### 気付き・学んだこと
 - **stdin 継承の罠**: Node.js における対話型スクリプト間で `spawn` を繋ぐ際、親が `readline.close()` を呼んだ直後の不安定な stdin を `inherit` すると、子プロセスが謎の終了（Silent Exit）を引き起こすことがある。入力が不要な子プロセスには明示的に `ignore` を設定することが安全。
 - **意図せぬフォールバックの排除**: 「もし環境変数がなかったらローカルに保存する」という親切設計が、ポータブルな隔離環境（グローバルインストール等）を維持する上では「バグを隠蔽して間違った場所に書き込む」最悪の原因となる。ポータビリティを担保するには Fail-Fast（早々にエラーにする）設計が不可欠。
+- **gogcli (99designs/keyring) のパスワードプロンプトの罠**: gogcli のような CLI ツールを非対話（バックグラウンド）で spawn する際、システムの標準キーリング（GNOME等）がない WSL/Linux 環境では、ファイルベースの暗号化キーリングにフォールバックして標準入力からパスワードを聞こうとするため、プロセスが永遠にハングするか異常終了してしまう。これを回避するには `GOG_KEYRING_BACKEND` や `GOG_KEYRING_PASSWORD` のような専用の環境変数を渡して対話プロンプト発生を元から絶つ必要がある。
 
 ### 変更したファイル
 - `interactive-setup.js` — `setup-gemini-auth.js` 呼び出し時の `stdio` を `['ignore', 'inherit', 'inherit']` に変更
+- `interactive-setup.js` — `getGogEnv()` 内に `GOG_KEYRING_BACKEND: 'file'`, `GOG_KEYRING_PASSWORD: 'openclaw-adapter'` を追加
 - `scripts/setup-gemini-auth.js` — フォールバックの削除、保存処理の `try-catch` 分離、明示的なログ出力の追加

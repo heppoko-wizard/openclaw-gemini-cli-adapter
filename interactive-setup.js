@@ -225,7 +225,13 @@ function isOpenclawBuilt() {
 // ========== Main ==========
 
 function getGogEnv() {
-    return { ...process.env, XDG_CONFIG_HOME: path.join(GEMINI_CREDS_DIR, '.config') };
+    return {
+        ...process.env,
+        XDG_CONFIG_HOME: path.join(GEMINI_CREDS_DIR, '.config'),
+        // CLIが対話型キーリング（GNOME等）のパスワード入力を求めてハングするのを防ぐため、明示的にファイルバックエンドと固定パスワードを渡す
+        GOG_KEYRING_BACKEND: 'file',
+        GOG_KEYRING_PASSWORD: 'openclaw-adapter'
+    };
 }
 
 async function main() {
