@@ -450,6 +450,8 @@ async function main() {
 
     // 報告書に基づいたフル権限・安定稼働設定を注入
     settings.model = settings.model || { name: 'auto-gemini-3' };
+    // defaultApprovalMode: 'yolo' は settings.json のスキーマ上で無効な値のため削除。
+    // YOLO モードは runner-pool.js の --approval-mode=yolo CLI 引数で制御する。
     settings.security = settings.security || {};
     settings.security.auth = { ...settings.security.auth, selectedType: 'oauth-personal' };
     settings.security.folderTrust = { enabled: false };
