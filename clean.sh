@@ -23,12 +23,13 @@ echo "  2. アダプターを npm グローバルの OpenClaw フォルダから
 echo "  3. OpenClaw をグローバルアンインストール (sudo npm uninstall -g openclaw)"
 echo "  4. ~/.openclaw/ の設定ファイル削除 (任意)"
 echo "  5. ~/.config/gogcli/ の設定ファイル削除 (任意)"
+echo "  6. gogcli バイナリのアンインストール (任意)"
 echo ""
 read -p "続行しますか？ (Enter で続行 / Ctrl+C でキャンセル)"
 
 # ---- [1] プロセス停止 ----
 echo ""
-echo -e "${CYAN}[1/4] 実行中のプロセスを停止中...${RESET}"
+echo -e "${CYAN}[1/6] 実行中のプロセスを停止中...${RESET}"
 
 kill $(lsof -t -i :18789 2>/dev/null) 2>/dev/null && echo "  ✓ Gateway (port 18789) を停止しました" || echo "  - Gateway は起動していません"
 kill $(lsof -t -i :3972 2>/dev/null) 2>/dev/null  && echo "  ✓ Adapter (port 3972) を停止しました"  || echo "  - Adapter は起動していません"
@@ -42,7 +43,7 @@ fi
 
 # ---- [2] npm グローバルからアダプターフォルダを削除 ----
 echo ""
-echo -e "${CYAN}[2/4] npm グローバルの OpenClaw フォルダ内アダプターを削除中...${RESET}"
+echo -e "${CYAN}[2/6] npm グローバルの OpenClaw フォルダ内アダプターを削除中...${RESET}"
 
 NPM_ROOT=$(npm root -g 2>/dev/null || echo "")
 if [ -n "$NPM_ROOT" ]; then
@@ -59,7 +60,7 @@ fi
 
 # ---- [3] OpenClaw グローバルアンインストール ----
 echo ""
-echo -e "${CYAN}[3/4] OpenClaw をグローバルアンインストール中...${RESET}"
+echo -e "${CYAN}[3/6] OpenClaw をグローバルアンインストール中...${RESET}"
 
 if command -v openclaw >/dev/null 2>&1; then
     sudo npm uninstall -g openclaw
@@ -70,7 +71,7 @@ fi
 
 # ---- [4] ~/.openclaw/ の削除（任意） ----
 echo ""
-echo -e "${CYAN}[4/4] OpenClaw 設定ファイルの削除 (任意)${RESET}"
+echo -e "${CYAN}[4/6] OpenClaw 設定ファイルの削除 (任意)${RESET}"
 OPENCLAW_DIR="$HOME/.openclaw"
 if [ -d "$OPENCLAW_DIR" ]; then
     echo ""
@@ -87,7 +88,7 @@ fi
 
 # ---- [5] gogcli 認証情報の削除 (任意) ----
 echo ""
-echo -e "${CYAN}[5/5] gogcli 認証情報の削除 (任意)${RESET}"
+echo -e "${CYAN}[5/6] gogcli 認証情報の削除 (任意)${RESET}"
 GOG_DIR="$HOME/.config/gogcli"
 if [ -d "$GOG_DIR" ]; then
     echo ""
@@ -100,6 +101,28 @@ if [ -d "$GOG_DIR" ]; then
     fi
 else
     echo "  - ~/.config/gogcli/ は存在しません"
+fi
+
+# ---- [6] gogcli バイナリの削除 (任意) ----
+echo ""
+echo -e "${CYAN}[6/6] gogcli バイナリの削除 (任意)${RESET}"
+GOG_BIN=$(command -v gog 2>/dev/null || echo "")
+if [ -n "$GOG_BIN" ]; then
+    echo ""
+    read -p "  gog バイナリ ($GOG_BIN) を削除しますか？ (y/N): " REMOVE_GOG_BIN
+    if [[ "$REMOVE_GOG_BIN" =~ ^[Yy]$ ]]; then
+        # Homebrewかどうかチェック
+        if [[ "$GOG_BIN" == *"/brew/"* ]] || [[ "$GOG_BIN" == *"/Cellar/"* ]]; then
+            brew uninstall gogcli && echo "  ✓ brew uninstall gogcli 完了"
+        else
+            sudo rm -f "$GOG_BIN"
+            echo "  ✓ 削除: $GOG_BIN"
+        fi
+    else
+        echo "  - スキップしました（gog バイナリは保持されます）"
+    fi
+else
+    echo "  - gog コマンドが見つかりません"
 fi
 
 echo ""

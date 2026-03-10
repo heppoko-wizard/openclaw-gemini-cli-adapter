@@ -690,7 +690,7 @@ async function main() {
 
                     const authArgs = [
                         'auth', 'add', email,
-                        '--services', 'calendar',
+                        '--services', 'gmail,calendar,drive,docs,sheets,contacts,tasks,people',
                         '--extra-scopes', scopes.join(','),
                         '--force-consent'
                     ];
