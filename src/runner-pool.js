@@ -70,6 +70,14 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
         trust: true
     };
 
+    // ワークスペースを信頼リストに追加し、YOLOモードの上書きを防止する
+    userSettings.security = userSettings.security || {};
+    userSettings.security.folderTrust = userSettings.security.folderTrust || {};
+    userSettings.security.folderTrust.trustedFolders = [
+        workspaceCwd,
+        isolatedHomeDir
+    ];
+
     fs.writeFileSync(
         settingsPath,
         JSON.stringify(userSettings, null, 2),
