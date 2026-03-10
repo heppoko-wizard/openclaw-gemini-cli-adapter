@@ -450,7 +450,6 @@ async function main() {
 
     // 報告書に基づいたフル権限・安定稼働設定を注入
     settings.model = settings.model || { name: 'auto-gemini-3' };
-    settings.general = { ...settings.general, defaultApprovalMode: 'yolo' };
     settings.security = settings.security || {};
     settings.security.auth = { ...settings.security.auth, selectedType: 'oauth-personal' };
     settings.security.folderTrust = { enabled: false };
