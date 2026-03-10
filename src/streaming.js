@@ -241,21 +241,23 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                         });
                         break;
 
-                    case 'tool_result':
+                    case 'tool_result': {
                         // ツール実行結果の通知
-                        const isSuccess = json.status === 'success' && !json.error && (json.exitCode === 0 || json.exitCode === undefined);
+                        // status が 'success' かつ error がない場合のみ成功とみなす。
+                        // run_shell_command は Exit Code 非ゼロでも status=success を返すため、
+                        // error フィールドと exitCode を併せてチェックする。
+                        const isSuccess = json.status === 'success' && !json.error;
                         const statusIcon = isSuccess ? '✅' : '❌';
-                        let toolMsg = `${statusIcon} Tool finished.`;
-
-                        // 失敗時は詳細をUIに付加（ハルシネーション防止）
-                        if (!isSuccess) {
-                            if (json.error) {
-                                toolMsg += ` Error: ${json.error}`;
-                            } else if (json.exitCode !== undefined && json.exitCode !== 0) {
-                                toolMsg += ` (Exit Code: ${json.exitCode})`;
-                            }
+                        let toolMsg;
+                        if (isSuccess) {
+                            toolMsg = `${statusIcon} Tool finished.`;
+                        } else if (json.error) {
+                            toolMsg = `${statusIcon} Tool failed. Error: ${json.error}`;
+                        } else if (json.exitCode !== undefined && json.exitCode !== 0) {
+                            toolMsg = `${statusIcon} Tool failed. (Exit Code: ${json.exitCode})`;
+                        } else {
+                            toolMsg = `${statusIcon} Tool finished with unknown status.`;
                         }
-
                         sseWrite(res, {
                             id: responseId,
                             object: 'chat.completion.chunk',
@@ -268,6 +270,7 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                             }]
                         });
                         break;
+                    }
 
                     case 'error':
                         sseWrite(res, {
