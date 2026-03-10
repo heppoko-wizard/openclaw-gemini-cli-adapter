@@ -9,11 +9,11 @@
  * (runEmbeddedPiAgent) to Google's Gemini CLI tool.
  */
 
-const fs = require('fs');
+const fs   = require('fs');
 const http = require('http');
 const { log, randomId } = require('./utils');
 const { extractText, convertToGeminiMessages } = require('./converter');
-const { loadSessionMap, saveSessionMap } = require('./session');
+const { loadSessionMap, saveSessionMap, overwriteSessionHistory } = require('./session');
 const { prepareGeminiEnv, runGeminiStreaming } = require('./streaming');
 
 // ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ const server = http.createServer(async (req, res) => {
     // Models endpoint (OpenClaw probes this)
     if (req.method === 'GET' && (url.pathname === '/v1/models' || url.pathname === '/models')) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-
+        
         let modelsList = [{ id: 'gemini', object: 'model', owned_by: 'google' }];
         try {
             const core = require('@google/gemini-cli-core');
@@ -97,11 +97,11 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        const messages = body.messages || body.input || [];
-        const stream = body.stream !== false;
-        const sessionKey = body._openclawSessionKey || body._sessionId || 'default';
+        const messages    = body.messages || body.input || [];
+        const stream      = body.stream !== false;
+        const sessionKey  = body._openclawSessionKey || body._sessionId || 'default';
         const workspaceDir = body._workspaceDir || process.cwd();
-
+        
         let reqModel = body.model || 'auto-gemini-3';
         if (reqModel === 'auto' || reqModel === 'gemini') {
             reqModel = 'auto-gemini-3';
@@ -141,35 +141,6 @@ const server = http.createServer(async (req, res) => {
         const historyMessages = lastUserIdx > 0 ? messages.slice(0, lastUserIdx) : [];
         const promptText = lastUserText.replace(/\[media attached[^\]]*\]/gi, '').trim();
 
-        // Check if the prompt is a summarization/compression request from OpenClaw.
-        // If so, intercept it and return a fake response explaining that Gemini CLI handles this automatically.
-        const isSummarization = /summarize the (?:conversation|chat|history|previous)/i.test(promptText) ||
-            /compress (?:the )?(?:conversation|history)/i.test(promptText);
-
-        if (isSummarization) {
-            log(`[server] Intercepting summarization request: "${promptText.substring(0, 50)}..."`);
-            const interceptionMsg = "Gemini CLI maintains its own high-fidelity conversation history and automatically manages context compression using <state_snapshot>. Manual summarization from the client is not required and has been bypassed to preserve memory integrity.";
-
-            if (stream) {
-                res.writeHead(200, {
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive',
-                });
-                const delta = JSON.stringify({
-                    choices: [{ delta: { content: interceptionMsg }, index: 0, finish_reason: 'stop' }]
-                });
-                res.write(`data: ${delta}\n\ndata: [DONE]\n\n`);
-                res.end();
-            } else {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    choices: [{ message: { role: 'assistant', content: interceptionMsg }, finish_reason: 'stop' }]
-                }));
-            }
-            return;
-        }
-
         // Set up Gemini environment
         let env, chatsDir, tempSystemMdPath;
         try {
@@ -184,7 +155,22 @@ const server = http.createServer(async (req, res) => {
         const sessionMap = loadSessionMap();
         let geminiSessionId = sessionMap[sessionKey] || null;
 
-        // (History management is now handled exclusively by Gemini CLI via --resume)
+        // If we have an existing Gemini session AND history, overwrite its messages
+        if (geminiSessionId && historyMessages.length > 0) {
+            try {
+                const newMessages = convertToGeminiMessages(historyMessages);
+                const ok = overwriteSessionHistory(chatsDir, geminiSessionId, newMessages);
+                if (ok) {
+                    log(`overwrote session ${geminiSessionId} with ${historyMessages.length} pruned msgs`);
+                } else {
+                    log(`session file for ${geminiSessionId} not found — starting fresh`);
+                    geminiSessionId = null;
+                }
+            } catch (e) {
+                log(`Failed to overwrite session: ${e.message} — starting fresh`);
+                geminiSessionId = null;
+            }
+        }
 
         const requestId = randomId();
         log(`Selected model: ${reqModel}`);
@@ -209,7 +195,7 @@ const server = http.createServer(async (req, res) => {
                         abortHandle.kill();
                     }
                 }
-                try { fs.rmSync(tempSystemMdPath); } catch (_) { }
+                try { fs.rmSync(tempSystemMdPath); } catch (_) {}
             });
 
             abortHandle = await runGeminiStreaming({
@@ -240,7 +226,7 @@ const server = http.createServer(async (req, res) => {
                         try {
                             const ev = JSON.parse(line.slice(6));
                             fullText += ev.choices?.[0]?.delta?.content || '';
-                        } catch (_) { }
+                        } catch (_) {}
                     }
                 },
                 end: () => {
@@ -250,9 +236,9 @@ const server = http.createServer(async (req, res) => {
                         object: 'chat.completion',
                         choices: [{ index: 0, message: { role: 'assistant', content: fullText }, finish_reason: 'stop' }],
                     }));
-                    try { fs.rmSync(tempSystemMdPath); } catch (_) { }
+                    try { fs.rmSync(tempSystemMdPath); } catch (_) {}
                 },
-                on: () => { },
+                on: () => {},
             };
             runGeminiStreaming({
                 prompt: promptText,
