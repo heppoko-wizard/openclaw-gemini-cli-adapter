@@ -258,6 +258,26 @@ async function main() {
     const nodeVer = hasNode ? spawnSync('node', ['-v'], { shell: true, stdio: 'pipe' }).stdout.toString().trim() : '';
     console.log(`  ${hasNode ? C.green(`${L().found} Node.js (${nodeVer})`) : C.red(`${L().not_found} Node.js`)}`);
 
+    // Node.js の絶対パスを解決して専用ファイルに保存（問題11 恒久対策）
+    // セットアップ時点で確実に動いているNodeパスを記録し、アダプタ実行時の第一選択として利用する。
+    if (hasNode) {
+        try {
+            const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+            const nodeAbsPath = spawnSync(whichCmd, ['node'], { encoding: 'utf-8', shell: true }).stdout?.trim();
+            if (nodeAbsPath && fs.existsSync(nodeAbsPath)) {
+                const configDir = path.join(os.homedir(), '.openclaw');
+                if (!fs.existsSync(configDir)) {
+                    fs.mkdirSync(configDir, { recursive: true });
+                }
+                const adapterNodePathFile = path.join(configDir, 'adapter-node-path.txt');
+                fs.writeFileSync(adapterNodePathFile, nodeAbsPath, 'utf8');
+                console.log(`  ${C.dim(`  → Node.js パスを保存しました: ${nodeAbsPath}`)}`);
+            }
+        } catch (e) {
+            // 保存失敗は続行を妨げない
+        }
+    }
+
     // Bun
     const hasBun = !!spawnSync('bun', ['--version'], { shell: true, stdio: 'pipe' }).stdout?.toString().trim();
     console.log(`  ${hasBun ? C.green(`${L().found} Bun`) : C.yellow(`${L().not_found} Bun`)}`);

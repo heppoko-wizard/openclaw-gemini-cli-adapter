@@ -22,9 +22,16 @@ function resolveOpenClawWorkspace() {
         console.warn(`[Pool] Could not read openclaw.json, using default workspace: ${e.message}`);
     }
     // 相対パスなら ~/.openclaw を基準に解決
-    const resolved = path.isAbsolute(workspace)
+    const resolved = (path.isAbsolute(workspace)
         ? workspace
-        : path.resolve(openclawDir, workspace);
+        : path.resolve(openclawDir, workspace)).trim();
+
+    // spawn の cwd に指定するため、存在しない場合は作成する
+    if (!fs.existsSync(resolved)) {
+        fs.mkdirSync(resolved, { recursive: true });
+        console.log(`[Pool] Created workspace directory: ${resolved}`);
+    }
+
     console.log(`[Pool] Resolved OpenClaw workspace: ${resolved}`);
     return resolved;
 }
@@ -124,7 +131,48 @@ class RunnerPool {
         console.log("[Pool] Spawning a new warm standby runner (Node.js)...");
         const runnerPath = path.resolve(__dirname, 'runner.mjs');
 
-        const execCmd = 'node';
+        // Node.js バイナリの堅牢な解決ロジック
+        // 優先順位:
+        //   1. adapter-node-path.txt に保存されたセットアップ時のパス（最も確実）
+        //   2. process.execPath が node の場合はそれを使用
+        //   3. which node でパスを検索
+        //   4. 定番の絶対パスへのフォールバック
+        //   5. 最終手段：環境の PATH に任せる
+        const resolveNodeBin = () => {
+            // 1. adapter-node-path.txt に保存されたパス（第一選択）
+            try {
+                const nodePathFile = path.join(os.homedir(), '.openclaw', 'adapter-node-path.txt');
+                if (fs.existsSync(nodePathFile)) {
+                    const savedPath = fs.readFileSync(nodePathFile, 'utf-8').trim();
+                    if (savedPath && fs.existsSync(savedPath)) {
+                        return savedPath;
+                    }
+                }
+            } catch (_) { }
+
+            // 2. process.execPath が node の場合はそれを使用
+            const execPath = process.execPath;
+            if (path.basename(execPath).startsWith('node')) {
+                return execPath;
+            }
+            // 3. process.execPath が node でない（openclaw バイナリ等）場合、PATH から探す
+            try {
+                const { execFileSync } = require('child_process');
+                const resolved = execFileSync('which', ['node'], { encoding: 'utf-8' }).trim();
+                if (resolved) return resolved;
+            } catch (_) {
+                // which が失敗した場合は既知の絶対パスへフォールバック
+            }
+            // 4. 定番の絶対パスを順に試す
+            for (const p of ['/usr/bin/node', '/usr/local/bin/node', '/opt/homebrew/bin/node']) {
+                if (fs.existsSync(p)) return p;
+            }
+            // 5. 最終手段：環境への PATH 解決に任せる（失敗する可能性はある）
+            return 'node';
+        };
+
+        const execCmd = resolveNodeBin();
+        console.log(`[Pool] Resolved node binary: ${execCmd}`);
 
         const runner = spawn(execCmd, [runnerPath, '--approval-mode=yolo', '--sandbox=false', '-o', 'stream-json'], {
             stdio: ['ignore', 'pipe', 'pipe', 'ipc'],

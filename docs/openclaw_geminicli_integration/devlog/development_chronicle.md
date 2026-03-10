@@ -741,3 +741,59 @@
 - `interactive-setup.js` — `getGogEnv()` 内に `GOG_KEYRING_BACKEND: 'file'`, `GOG_KEYRING_PASSWORD: 'openclaw-adapter'` を追加
 - `scripts/setup-gemini-auth.js` — フォールバックの削除、保存処理の `try-catch` 分離、明示的なログ出力の追加
 - `src/runner-pool.js` — バックグラウンドプロセス生成コマンドを `process.execPath` から `'node'` に変更（ENOENTエラーを回避）
+
+---
+
+## [2026-03-10] Session 31.5: MCPツールの実効性確保とWorkspace権限の最小化
+
+### やったこと
+
+#### ステップ1: MCPツールの偽実行（ハルシネーション）の完全防止 (Issue 9)
+- **課題**: `cron` や `message` 等の OpenClaw 固有の MCP ツールを実行する際、Gemini CLI 側でシステムエラー（利用不可や権限不足）が起きているにもかかわらず、そのエラーがインジケーターとして返らず、AIが「成功した」と勝手に結果を捏造（ハルシネーション）して会話を続ける極めて危険な状態が発覚した。
+- **原因**: 
+  1. `interactive-setup.js` における `settings.json` の生成時、`mcpServers` オブジェクトのキーに不要な設定値が混入しており、MCP自体が正しくロードされていなかった。
+  2. Workspace 側ツール（`core`）を利用するために必要なディレクトリごとのパーミッション（`folderTrust`）が不足していた。
+  3. `runner-pool.js` でバックグラウンドワーカーを spawn する際、gogcli 等へのアクセスに必要な環境変数（`GEMINI_CREDS_DIR`, `XDG_CONFIG_HOME`, `GOG_KEYRING_BACKEND`等）をコンテキストとして渡しておらず、裏でツール実行がクラッシュしていた。
+- **解決策**:
+  - `interactive-setup.js` にて `settings.json` から不正なダミーキーを除去し、`tools.core` に対するフルアクセス権を付与するパーミッション記述を明示的に追加した。
+  - `runner-pool.js` の `resolveNodeBin` および `spawn` 時の `env` オプションを拡張し、gogcli 認証コンテキストを全て子プロセスに中継するよう修正。これにより物理的なツール実行の失敗が確実にエラーとしてAIにフィードバックされるようになり、捏造が防止された。
+
+#### ステップ2: Google Workspace 認証スコープの最小権限化 (Issue 10)
+- **課題**: `interactive-setup.js` における Google Workspace（`gog` コマンド）のセットアップ時、これまでは `--services` フラグを用いて認証を行っていた。しかし、このコマンド仕様上、明示的に指定しないと Gmail などユーザーの全データを読み書きできる強力すぎるデフォルトスコープを要求してしまい、セキュリティポリシー的に問題があった。
+- **解決策**:
+  - すでに GCP 側で定義・許可している最小限の必要なスコープ（Calendar, Drive 等）のみをピンポイントで要求するよう認証コマンドを再設計した。
+  - `gog` コマンドの制約をハックし、影響の少ない API である `--services people` をセンチネル（ダミーの必須値）として渡しつつ、本命の権限を `--extra-scopes` によって厳密な URL（例: `https://www.googleapis.com/auth/calendar.readonly` 等）で指定して認証させる実装へと修正した。
+
+### 変更したファイル
+- `interactive-setup.js` — Workspace 最小権限スコープの指定ハック、`settings.json` のクリーンアップと `tools.core` への明示的な権限付与
+- `src/runner-pool.js` — ツールプロセス (spawn) に対する gogcli 連携用の環境変数 (env) の全引き継ぎ処理の追加
+
+---
+
+## [2026-03-10] Session 32: RunnerPool のハングアップ問題（ENOENT）の完全解決
+
+### やったこと
+
+#### ステップ1: 堅牢な Node.js バイナリ解決の実装 (Issue 11)
+- **課題**: `runner-pool.js` でバックグラウンドプロセスを `spawn('node')` で生成する変更を行った結果、システムの `PATH` がデーモン起動時などに継承されず、`spawn node ENOENT` エラーでアダプタが応答しなくなる（ハング）障害が発生した。
+- **解決策**: `process.execPath` への単純な依存や `'node'` 文字列リテラルへの依存を廃止し、`resolveNodeBin()` という探索関数を実装。`process.execPath` が有効かチェックし、ダメなら `which node` で探索し、さらに `/usr/bin/node` などの絶対パスへフォールバックする多段構えの堅牢な起動ロジックを構築した。
+
+#### ステップ2: インストール時の Node.js パス保存機能 (Issue 12)
+- **課題**: NVM などの特殊な環境下やグローバルインストールでは、上記の手法でも実行時のコンテキストによって正しい Node.js を見失うリスクがあった。
+- **解決策**:
+  - `interactive-setup.js` の環境チェックフェーズで、実際に呼び出せた Node.js の絶対パス（`which node`）を取得し、`~/.openclaw/adapter-node-path.txt` という専用の外部ファイルに保存するロジックを追加した。
+  - `runner-pool.js` の `resolveNodeBin()` において、この `adapter-node-path.txt` の内容を**最優先（第一選択）**として読み込むよう改修。これにより「セットアップを通過した確実な Node.js」への依存が保証された。
+- **失敗・学んだこと**: 最初、パスの保存先として `~/.openclaw/openclaw.json` を選択したが、OpenClaw 本体が厳格なスキーマ検証（`openclaw doctor` 等）を行っているため、未知のキー `agents.defaults.nodePath` が原因で設定ファイルエラー（Unrecognized key）を引き起こしてしまった。アダプタ固有の状態は、本体の管理ファイルを汚染せず、独立した専用ファイル（`adapter-node-path.txt`）で管理するべきであるという原則を再確認した。
+
+#### ステップ3: ENOENT の真因（CWD の不在）の修正 (Issue 13)
+- **課題**: 上記のプロセス改善を行ってもなお、クリーンインストール環境では `spawn /usr/bin/node ENOENT` エラーが消えず、Runner プロセスが起動（Ready）しなかった。調査の結果、`/usr/bin/node` 自体は存在していた。
+- **原因**: `runner-pool.js` が `spawn()` する際の `cwd`（カレントワーキングディレクトリ）指定に利用している `~/.openclaw/workspace` が、**新規インストール直後の初回起動時点では物理的に存在していなかった**。Node.js の `spawn()` は、指定された `cwd` ディレクトリが存在しないと、コマンドが実在していても `ENOENT` を返す仕様であるため、これが全てのハングの真の元凶であった。
+- **解決策**: `resolveOpenClawWorkspace()` 関数に、解決したディレクトリパスが存在しない場合は `fs.mkdirSync(resolved, { recursive: true })` で自動的に作成する防衛ロジックを追加した。
+
+### 成果
+- 上記3段階の多層的な修正（パスの探索・保存・CWDの事前生成）により、ゼロからのクリーンインストール環境においても、Gemini CLI の Runner プロセスが確実に一発で起動し、`[Pool] Runner is ready to accept requests.` 状態まで到達するようになった。
+
+### 変更したファイル
+- `interactive-setup.js` — Node.js 絶対パスの取得と `~/.openclaw/adapter-node-path.txt` への保存処理の追加
+- `src/runner-pool.js` — `adapter-node-path.txt` の優先読み込み、堅牢なバイナリ解決 (`resolveNodeBin`) の実装、および `cwd` ディレクトリの自動作成 (`fs.mkdirSync`)
+
