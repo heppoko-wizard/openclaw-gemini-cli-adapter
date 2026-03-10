@@ -70,14 +70,6 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
         trust: true
     };
 
-    // ワークスペースを信頼リストに追加し、YOLOモードの上書きを防止する
-    userSettings.security = userSettings.security || {};
-    userSettings.security.folderTrust = userSettings.security.folderTrust || {};
-    userSettings.security.folderTrust.trustedFolders = [
-        workspaceCwd,
-        isolatedHomeDir
-    ];
-
     fs.writeFileSync(
         settingsPath,
         JSON.stringify(userSettings, null, 2),
@@ -128,7 +120,11 @@ class RunnerPool {
             env: {
                 ...process.env,
                 GEMINI_CLI_HOME: this.isolatedGeminiHome,
+                // gogcli が隔離ディレクトリの認証情報を読めるようにする。
+                // これがないと gog コマンドが ~/.config/gogcli を読みに行き missing --account で失敗する。
                 XDG_CONFIG_HOME: path.join(this.isolatedGeminiHome, '.config'),
+                // WSL/Linux 環境で GNOME キーリング等が利用できない場合のハング防止。
+                // ファイルベースのキーリングを明示して対話プロンプトを完全にバイパスする。
                 GOG_KEYRING_BACKEND: 'file',
                 GOG_KEYRING_PASSWORD: 'openclaw-adapter',
             }
