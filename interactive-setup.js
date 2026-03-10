@@ -678,10 +678,6 @@ async function main() {
                         'https://www.googleapis.com/auth/userinfo.profile',
                         'https://www.googleapis.com/auth/drive.file',
                         'https://www.googleapis.com/auth/drive.appdata',
-                        'https://www.googleapis.com/auth/profile.agerange.read',
-                        'https://www.googleapis.com/auth/profile.language.read',
-                        'https://www.googleapis.com/auth/user.addresses.read',
-                        'https://www.googleapis.com/auth/user.birthday.read',
                         'https://www.googleapis.com/auth/calendar',
                         'https://www.googleapis.com/auth/documents',
                         'https://www.googleapis.com/auth/spreadsheets.readonly',
@@ -691,7 +687,6 @@ async function main() {
 
                     const authArgs = [
                         'auth', 'add', email,
-                        '--services', 'gmail,calendar,drive,docs,sheets,contacts,tasks,people',
                         '--extra-scopes', scopes.join(','),
                         '--force-consent'
                     ];
