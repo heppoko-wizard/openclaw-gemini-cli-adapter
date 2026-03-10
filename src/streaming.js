@@ -243,7 +243,19 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
 
                     case 'tool_result':
                         // ツール実行結果の通知
-                        const statusIcon = json.status === 'success' ? '✅' : '❌';
+                        const isSuccess = json.status === 'success' && !json.error && (json.exitCode === 0 || json.exitCode === undefined);
+                        const statusIcon = isSuccess ? '✅' : '❌';
+                        let toolMsg = `${statusIcon} Tool finished.`;
+
+                        // 失敗時は詳細をUIに付加（ハルシネーション防止）
+                        if (!isSuccess) {
+                            if (json.error) {
+                                toolMsg += ` Error: ${json.error}`;
+                            } else if (json.exitCode !== undefined && json.exitCode !== 0) {
+                                toolMsg += ` (Exit Code: ${json.exitCode})`;
+                            }
+                        }
+
                         sseWrite(res, {
                             id: responseId,
                             object: 'chat.completion.chunk',
@@ -251,7 +263,7 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                             model: 'gemini',
                             choices: [{
                                 index: 0,
-                                delta: { content: `${statusIcon} Tool finished.\n\n` },
+                                delta: { content: `${toolMsg}\n\n` },
                                 finish_reason: null
                             }]
                         });
