@@ -10,8 +10,8 @@
 Gemini CLI Adapter と OpenClaw Gateway、そしてコントロールダッシュボードを全て自動で起動します。
 
 ```bash
-cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
-# Windows の場合は launch.bat を実行
+cd "$(npm root -g)/openclaw/openclaw-gemini-cli-adapter"
+# Windows の場合は コマンドプロンプト等で該当ディレクトリへ移動して launch.bat を実行
 ./launch.sh
 ```
 
@@ -20,12 +20,11 @@ cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
 
 ```bash
 # ターミナル1: アダプタサーバーの起動 (Port: 3972)
-cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
+cd "$(npm root -g)/openclaw/openclaw-gemini-cli-adapter"
 ./start.sh
 
 # ターミナル2: OpenClaw Gatewayの起動 (Port: 18789)
-cd /home/heppo/ドキュメント/DEV/openclaw
-npm run openclaw -- gateway
+openclaw -- gateway
 ```
 
 ### 停止手順
@@ -33,7 +32,7 @@ npm run openclaw -- gateway
 専用の停止スクリプトを使用して、関連する全てのプロセス（Adapter, Gateway, コントロールダッシュボード, Gemini Runner）を一括で安全に終了します。
 
 ```bash
-cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
+cd "$(npm root -g)/openclaw/openclaw-gemini-cli-adapter"
 # Windows の場合は stop.bat を実行
 ./stop.sh
 ```
@@ -67,17 +66,19 @@ cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
   - `interactive-setup.js` を再実行するか、手動で `settings.json` を修正してサンドボックスを解除する。
 
 ## 3. 定期運用・クリーンアップ
-- （オプション）溜まったログファイル群 (`logs/adapter.log`, `openclaw-gateway.log`, `~/.openclaw/agents/` 内の `.jsonl`, `gemini-home/.gemini/tmp/` 以下のファイル群）の肥大化によるディスク圧迫の監視・削除。
+- （オプション）溜まったログファイル群 (`logs/adapter.log`, OpenClawのGatewayログ, `/home/{username}/.openclaw/agents/` 内の `.jsonl`, `gemini-home/.gemini/tmp/` 以下のファイル群）の肥大化によるディスク圧迫の監視・削除。
 
 ## 4. 環境情報
+
+※ `[AdapterDir]` は `npm root -g` の出力先にある `openclaw/openclaw-gemini-cli-adapter` ディレクトリを指します。
 
 | 項目 | 値 |
 |------|------|
 | Adapter ポート | 3972 |
 | OpenClaw ポート | 18789 |
-| アダプタログ | `/home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/logs/adapter.log` |
-| Gatewayログ | `/home/heppo/ドキュメント/DEV/openclaw/openclaw-gateway.log` |
-| 直近リクエスト | `/home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter/logs/adapter_last_req.json` |
+| アダプタログ | `[AdapterDir]/logs/adapter.log` |
+| Gatewayログ | `/home/{username}/.openclaw/logs/` 配下等の標準ログ出力先 |
+| 直近リクエスト | `[AdapterDir]/logs/adapter_last_req.json` |
 
 ---
 
@@ -87,3 +88,4 @@ cd /home/heppo/ドキュメント/DEV/openclaw/openclaw-gemini-cli-adapter
 | 2026-02-22 | 初版作成。デバッグの失敗を元に障害対応の指針を策定 |
 | 2026-02-24 | ログ集約（`logs/`配下）およびRunnerPool化に伴うJSONL注入ハックの削除を反映 |
 | 2026-03-02 | 権限不足（サンドボックス制限）に関するトラブルシューティングを追記 |
+| 2026-03-10 | OpenClawのバイナリインストール版移行に伴うパス（`/home/{username}/` や `npm root -g`）の修正 |
