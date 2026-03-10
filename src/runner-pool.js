@@ -112,7 +112,7 @@ class RunnerPool {
         console.log("[Pool] Spawning a new warm standby runner (Node.js)...");
         const runnerPath = path.resolve(__dirname, 'runner.mjs');
 
-        const execCmd = process.execPath;
+        const execCmd = 'node';
 
         const runner = spawn(execCmd, [runnerPath, '--approval-mode=yolo', '--sandbox=false', '-o', 'stream-json'], {
             stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
