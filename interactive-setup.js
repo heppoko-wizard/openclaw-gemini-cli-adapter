@@ -674,6 +674,9 @@ async function main() {
                     }
                     console.log(`  ${C.dim(`ブラウザが開きます。「${email}」を選択してログインしてください。`)}`);
 
+                    // gogcliは --services を省略または空にすると、内部で属性 default:"user" が適用され、全13サービスのフルアクセススコープ（Gmail等）が自動追加される。
+                    // これを防ぐため、デフォルトスコープが「profile」のみで安全な "people" サービスを1つ指定してパーサーを通過させる。
+                    // 実際に要求する全スコープは --extra-scopes でコントロールする。
                     const scopes = [
                         'https://www.googleapis.com/auth/userinfo.profile',
                         'https://www.googleapis.com/auth/drive.file',
@@ -687,6 +690,7 @@ async function main() {
 
                     const authArgs = [
                         'auth', 'add', email,
+                        '--services', 'people', // デフォルトの全13サービス展開を防ぎ、必要なスコープのみを要求するためのセンチネル値
                         '--extra-scopes', scopes.join(','),
                         '--force-consent'
                     ];
