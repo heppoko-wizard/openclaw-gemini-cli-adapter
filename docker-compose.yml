@@ -1,6 +1,9 @@
 services:
   adapter:
-    build: .
+    image: openclaw-gemini-adapter:latest
+    build:
+      context: .
+      network: host
     container_name: openclaw-gemini-adapter
     restart: unless-stopped
     # Use host network to seamlessly bind to Tailscale interface and expose ports directly

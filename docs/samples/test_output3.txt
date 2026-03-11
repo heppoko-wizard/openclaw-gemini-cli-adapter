@@ -1,0 +1,10 @@
+data: {"id":"resp_4af2260a-2a1e-4754-8815-984e7df1c047","object":"chat.completion.chunk","created":1773223901,"model":"gemini","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"resp_4af2260a-2a1e-4754-8815-984e7df1c047","object":"chat.completion.chunk","created":1773223906,"model":"gemini","choices":[{"index":0,"delta":{"content":"Yes, I used the `run_shell_command` tool to execute the `date` command and"},"finish_reason":null}]}
+
+data: {"id":"resp_4af2260a-2a1e-4754-8815-984e7df1c047","object":"chat.completion.chunk","created":1773223906,"model":"gemini","choices":[{"index":0,"delta":{"content":" retrieve the current system time."},"finish_reason":null}]}
+
+data: {"id":"resp_4af2260a-2a1e-4754-8815-984e7df1c047","object":"chat.completion.chunk","created":1773223906,"model":"gemini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+

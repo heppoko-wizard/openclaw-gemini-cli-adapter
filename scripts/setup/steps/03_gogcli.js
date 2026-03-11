@@ -14,13 +14,13 @@ module.exports = async function runStep() {
     const lang = getLang();
 
     // Check Gogcli installation
-    const gogBin = spawnSync('gog', ['--version'], { shell: true, env: getGogEnv() });
+    const gogBin = spawnSync('gog', ['--version'], { env: getGogEnv() });
     const hasGogcli = gogBin.status === 0;
 
     let hasGogAuth = false;
     if (hasGogcli) {
         try {
-            const listRes = spawnSync('gog', ['auth', 'list', '--json'], { shell: true, env: getGogEnv() });
+            const listRes = spawnSync('gog', ['auth', 'list', '--json'], { env: getGogEnv() });
             if (listRes.status === 0) {
                 const listData = JSON.parse(listRes.stdout.toString());
                 hasGogAuth = listData.accounts && listData.accounts.length > 0;
@@ -48,19 +48,9 @@ module.exports = async function runStep() {
         return;
     }
 
-    // Install
+    // Install Check (It should be installed in Dockerfile)
     if (!hasGogcli) {
-        logInfo('  gogcli をインストール中...');
-        if (process.platform === 'linux') {
-            const dlCmd = `curl -fsSL "https://github.com/steipete/gogcli/releases/latest/download/gogcli_linux_amd64.tar.gz" | tar xz -C /usr/local/bin gog`;
-            const dlResult = spawnSync('sudo', ['sh', '-c', dlCmd], { stdio: 'inherit' });
-            if (dlResult.status !== 0) {
-                throw new Error('gogcli のインストールに失敗しました。');
-            }
-        } else {
-            logWarn('  自動インストール非対応のOSです。スキップします。');
-            return;
-        }
+        throw new Error('gogcli が見つかりません。Dockerfileのビルドステップを確認してください。');
     }
 
     // Auth
@@ -78,7 +68,7 @@ module.exports = async function runStep() {
     fs.writeFileSync(GOG_CREDS_FILE, JSON.stringify(proxyClientSecret, null, 2));
 
     // Register credentials
-    spawnSync('gog', ['auth', 'credentials', GOG_CREDS_FILE], { shell: true, env: getGogEnv() });
+    spawnSync('gog', ['auth', 'credentials', GOG_CREDS_FILE], { env: getGogEnv() });
 
     let defaultEmail = '';
     try {
@@ -124,7 +114,7 @@ module.exports = async function runStep() {
     const authArgs = ['auth', 'add', email, '--services', 'people', '--extra-scopes', scopes.join(','), '--force-consent'];
 
     await new Promise((resolve, reject) => {
-        const child = spawn('gog', authArgs, { stdio: ['ignore', 'pipe', 'pipe'], shell: true, env: getGogEnv() });
+        const child = spawn('gog', authArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: getGogEnv() });
         let redirectServer = null;
         let urlCaptured = false;
         let outputBuffer = '';

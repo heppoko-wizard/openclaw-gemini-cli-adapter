@@ -1,0 +1,16 @@
+data: {"id":"resp_d0ad0d66-1b3e-45ff-b54a-f671a2af0c8e","object":"chat.completion.chunk","created":1773223861,"model":"gemini","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"resp_d0ad0d66-1b3e-45ff-b54a-f671a2af0c8e","object":"chat.completion.chunk","created":1773223880,"model":"gemini","choices":[{"index":0,"delta":{"content":"I will use the `date` command to check the current time."},"finish_reason":null}]}
+
+data: {"id":"resp_d0ad0d66-1b3e-45ff-b54a-f671a2af0c8e","object":"chat.completion.chunk","created":1773223880,"model":"gemini","choices":[{"index":0,"delta":{"content":"\n\n⚙️ Using tool [run_shell_command] ...\n<!-- <tool_metadata>{\"type\":\"tool_use\",\"timestamp\":\"2026-03-11T10:11:20.603Z\",\"tool_name\":\"run_shell_command\",\"tool_id\":\"run_shell_command_1773223880603_0\",\"parameters\":{\"description\":\"Getting the current system time.\",\"command\":\"date\"}}</tool_metadata> -->\n"},"finish_reason":null}]}
+
+data: {"id":"resp_d0ad0d66-1b3e-45ff-b54a-f671a2af0c8e","object":"chat.completion.chunk","created":1773223880,"model":"gemini","choices":[{"index":0,"delta":{"content":"✅ Tool finished.\n<!-- <tool_metadata>{\"type\":\"tool_result\",\"timestamp\":\"2026-03-11T10:11:20.682Z\",\"tool_id\":\"run_shell_command_1773223880603_0\",\"status\":\"success\",\"output\":\"Wed Mar 11 10:11:20 UTC 2026\"}</tool_metadata> -->\n\n"},"finish_reason":null}]}
+
+data: {"id":"resp_d0ad0d66-1b3e-45ff-b54a-f671a2af0c8e","object":"chat.completion.chunk","created":1773223883,"model":"gemini","choices":[{"index":0,"delta":{"content":"The current time is 10:"},"finish_reason":null}]}
+
+data: {"id":"resp_d0ad0d66-1b3e-45ff-b54a-f671a2af0c8e","object":"chat.completion.chunk","created":1773223883,"model":"gemini","choices":[{"index":0,"delta":{"content":"11:20 UTC."},"finish_reason":null}]}
+
+data: {"id":"resp_d0ad0d66-1b3e-45ff-b54a-f671a2af0c8e","object":"chat.completion.chunk","created":1773223883,"model":"gemini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+

@@ -31,6 +31,25 @@ else
     echo -e "  ${C_GREEN}✓ Docker installation completed.${C_RESET}"
 fi
 
+# 1.5 Check Docker Daemon (WSL fix)
+echo -e "\n  ${C_BOLD}Checking Docker daemon status...${C_RESET}"
+if ! docker info >/dev/null 2>&1; then
+    echo -e "  ${C_YELLOW}⚠ Docker daemon appears to be stopped. Attempting to start it...${C_RESET}"
+    
+    # Check if systemd is actual init system (PID 1) to avoid WSL host down errors
+    if [ -x "$(command -v systemctl)" ] && grep -q systemd /proc/1/comm 2>/dev/null; then
+        sudo systemctl start docker
+    else
+        sudo service docker start
+    fi
+    sleep 3
+    if ! docker info >/dev/null 2>&1; then
+        echo -e "  ${C_RED}⚠ Failed to start Docker daemon. Please start Docker Desktop or the daemon manually.${C_RESET}"
+        exit 1
+    fi
+    echo -e "  ${C_GREEN}✓ Docker daemon started successfully.${C_RESET}"
+fi
+
 # 2. Check docker-compose plugin
 if docker compose version >/dev/null 2>&1; then
     echo -e "  ${C_GREEN}✓ Docker Compose plugin is available${C_RESET}"
@@ -46,10 +65,67 @@ if [[ $USER_GROUPS != *"docker"* ]]; then
     echo -e "  ${C_CYAN}Adding $USER to docker group...${C_RESET}"
     sudo usermod -aG docker "$USER"
     echo -e "\n  ${C_BOLD}${C_GREEN}✓ Added to docker group.${C_RESET}"
-    echo -e "  ${C_BOLD}Applying group changes and proceeding to setup automatically...${C_RESET}"
-    exec sg docker -c "node docker-setup.js"
+    echo -e "  ${C_BOLD}Applying group changes and proceeding slowly to avoid permission errors...${C_RESET}"
+    sleep 2
 fi
 
-# 4. Proceed to docker-setup.js
-echo -e "\n  ${C_BOLD}Proceeding to the authentication and workspace setup...${C_RESET}"
-node docker-setup.js
+# 4. Tailscale Remote Access Setup (Host Level)
+echo -e "\n  ${C_BOLD}Checking Tailscale for remote access...${C_RESET}"
+if command -v tailscale >/dev/null 2>&1; then
+    echo -e "  ${C_GREEN}✓ Tailscale is installed on host.${C_RESET}"
+else
+    read -p "  🌍 Install Tailscale for secure remote access? [y/N]: " ts_choice
+    if [[ "$ts_choice" =~ ^[Yy]$ ]]; then
+        echo -e "  ${C_CYAN}Installing Tailscale...${C_RESET}"
+        curl -fsSL https://tailscale.com/install.sh | sh
+        
+        # Check if systemd is actual init system (PID 1)
+        if [ -x "$(command -v systemctl)" ] && grep -q systemd /proc/1/comm 2>/dev/null; then
+            sudo systemctl enable --now tailscaled
+        else
+            sudo sh -c 'tailscaled > /dev/null 2>&1 &'
+        fi
+        sleep 3
+        echo -e "  ${C_BOLD}Please authenticate Tailscale in your browser:${C_RESET}"
+        sudo tailscale up
+    else
+        echo -e "  ${C_DIM}Tailscale setup skipped.${C_RESET}"
+    fi
+fi
+
+# 5. Build and Run docker-setup.js inside a temporary container
+echo -e "\n  ${C_BOLD}Building setup and production container...${C_RESET}"
+# Use --network host to prevent WSL2 specific DNS/MTU docker bridge network timeouts
+docker build --network host -t openclaw-gemini-adapter:latest -f Dockerfile .
+
+echo -e "\n  ${C_BOLD}Proceeding to the authentication and workspace setup (Isolated Container Mode)...${C_RESET}"
+# Run container interactively, mounting current directory to allow setup scripts to write .env and .docker-config
+# Network mode host allows localhost OAuth callbacks to reach the container
+docker run -it --rm \
+    --network host \
+    -v "$(pwd):/app" \
+    -w /app \
+    openclaw-gemini-adapter:latest \
+    node docker-setup.js
+
+SETUP_EXIT_CODE=$?
+
+if [ $SETUP_EXIT_CODE -eq 0 ]; then
+    echo -e "\n${C_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+    echo -e "${C_BOLD}🚀 Starting OpenClaw Gemini CLI Adapter Container...${C_RESET}"
+    echo -e "${C_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}\n"
+    
+    # 6. Start the actual production container (using the already built image)
+    docker compose up -d
+    
+    if [ $? -eq 0 ]; then
+        echo -e "\n  ${C_BOLD}${C_GREEN}✓ Container is now running in the background!${C_RESET}"
+        echo -e "  To view logs: ${C_CYAN}docker logs -f openclaw-gemini-adapter${C_RESET}"
+    else
+        echo -e "\n  ${C_RED}⚠ Failed to start the container. Please check docker-compose output.${C_RESET}"
+    fi
+else
+    echo -e "\n  ${C_RED}⚠ Setup was interrupted or failed. Aborting container start.${C_RESET}"
+    exit $SETUP_EXIT_CODE
+fi
+

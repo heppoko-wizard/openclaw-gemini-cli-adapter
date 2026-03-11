@@ -1,0 +1,14 @@
+data: {"id":"resp_37a6ea7d-32b4-49c1-a3cc-5ec75421c10a","object":"chat.completion.chunk","created":1773223698,"model":"gemini","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"resp_37a6ea7d-32b4-49c1-a3cc-5ec75421c10a","object":"chat.completion.chunk","created":1773223704,"model":"gemini","choices":[{"index":0,"delta":{"content":"I will use the `date` command to check the current system time."},"finish_reason":null}]}
+
+data: {"id":"resp_37a6ea7d-32b4-49c1-a3cc-5ec75421c10a","object":"chat.completion.chunk","created":1773223704,"model":"gemini","choices":[{"index":0,"delta":{"content":"\n\n⚙️ Using tool [run_shell_command] ...\n"},"finish_reason":null}]}
+
+data: {"id":"resp_37a6ea7d-32b4-49c1-a3cc-5ec75421c10a","object":"chat.completion.chunk","created":1773223704,"model":"gemini","choices":[{"index":0,"delta":{"content":"✅ Tool finished.\n\n"},"finish_reason":null}]}
+
+data: {"id":"resp_37a6ea7d-32b4-49c1-a3cc-5ec75421c10a","object":"chat.completion.chunk","created":1773223707,"model":"gemini","choices":[{"index":0,"delta":{"content":"The current time is Wed Mar 11 10:08:24 UTC 2026."},"finish_reason":null}]}
+
+data: {"id":"resp_37a6ea7d-32b4-49c1-a3cc-5ec75421c10a","object":"chat.completion.chunk","created":1773223707,"model":"gemini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+

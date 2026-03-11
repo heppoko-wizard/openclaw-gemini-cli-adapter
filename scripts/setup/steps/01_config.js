@@ -3,36 +3,42 @@
 const fs = require('fs');
 const path = require('path');
 const { C, logDim, logSuccess, logError } = require('../utils/logger');
-const { OPENCLAW_CONFIG, GEMINI_CREDS_DIR } = require('../utils/docker-env');
+const { OPENCLAW_CONFIG, GEMINI_CREDS_DIR, PROJECT_ROOT } = require('../utils/docker-env');
 
 module.exports = async function runStep() {
-    let needsUpdate = true;
-
-    // スキップ判定（簡易版）: configファイルが既に書き込まれていればスキップ
     const settingsDir = path.join(GEMINI_CREDS_DIR, '.gemini');
     const settingsPath = path.join(settingsDir, 'settings.json');
-    if (fs.existsSync(OPENCLAW_CONFIG) && fs.existsSync(settingsPath)) {
-        // 設定済みならスキップ
-        logSuccess('✓ [済] 設定ファイルの生成');
-        return;
-    }
 
-    process.stdout.write(`\n  ${C.dim('設定ファイルを生成中...')} `);
+    process.stdout.write(`\n  ${C.dim('設定ファイルを生成・更新中...')} `);
     try {
         let config = {};
         fs.mkdirSync(path.dirname(OPENCLAW_CONFIG), { recursive: true });
-        config.agents = { defaults: { model: 'gemini-adapter/auto-gemini-3' } };
-        config.gateway = { mode: 'local', auth: { token: 'openclaw-docker-session' } };
+        if (fs.existsSync(OPENCLAW_CONFIG)) {
+            try { config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG, 'utf8')); } catch (e) { }
+        }
+        config.agents = config.agents || {};
+        config.agents.defaults = config.agents.defaults || {};
+        config.agents.defaults.model = 'gemini-adapter/auto-gemini-3';
+        config.gateway = config.gateway || {};
+        config.gateway.mode = 'local';
+        config.gateway.auth = config.gateway.auth || {};
+        config.gateway.auth.token = 'openclaw-docker-session';
         fs.writeFileSync(OPENCLAW_CONFIG, JSON.stringify(config, null, 2));
 
         fs.mkdirSync(settingsDir, { recursive: true });
-
-        let settings = {
-            model: { name: 'auto-gemini-3' },
-            security: { auth: { selectedType: 'oauth-personal' }, folderTrust: { enabled: false } },
-            tools: { sandbox: false },
-            // コンテナ側のワークスペースパス (/workspace) のみを許可する
-            context: { includeDirectories: ['/workspace'] }
+        let settings = {};
+        if (fs.existsSync(settingsPath)) {
+            try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch (e) { }
+        }
+        settings.model = settings.model || { name: 'auto-gemini-3' };
+        settings.security = settings.security || { auth: { selectedType: 'oauth-personal' }, folderTrust: { enabled: false } };
+        settings.tools = settings.tools || { sandbox: false };
+        settings.context = settings.context || { includeDirectories: ['/workspace'] };
+        settings.mcpServers = settings.mcpServers || {};
+        settings.mcpServers["openclaw-tools"] = {
+            "command": "node",
+            "args": [path.join(PROJECT_ROOT, "mcp-server.mjs"), "mcp-default", "/workspace"],
+            "trust": true
         };
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
         logSuccess('DONE');

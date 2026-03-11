@@ -1,0 +1,10 @@
+data: {"id":"resp_5dc530a4-a0e5-4810-85f1-8a0d8044ba43","object":"chat.completion.chunk","created":1773225495,"model":"gemini","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"resp_5dc530a4-a0e5-4810-85f1-8a0d8044ba43","object":"chat.completion.chunk","created":1773225501,"model":"gemini","choices":[{"index":0,"delta":{"content":"Yes, I used the `run_shell_command` tool to execute the `date` command.\n\n**JSON Arguments:**\n```json\n{\n"},"finish_reason":null}]}
+
+data: {"id":"resp_5dc530a4-a0e5-4810-85f1-8a0d8044ba43","object":"chat.completion.chunk","created":1773225501,"model":"gemini","choices":[{"index":0,"delta":{"content":"  \"command\": \"date\",\n  \"description\": \"Check the current time\"\n}\n```\n\n**Result Output:**\n```text\nWed Mar 11 10:37:41 UTC 2026\n```"},"finish_reason":null}]}
+
+data: {"id":"resp_5dc530a4-a0e5-4810-85f1-8a0d8044ba43","object":"chat.completion.chunk","created":1773225501,"model":"gemini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+
