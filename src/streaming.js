@@ -6,6 +6,32 @@ const path = require('path');
 const { log, randomId, sseWrite } = require('./utils');
 
 // ---------------------------------------------------------------------------
+// Zero-Width Character Steganography (SSoT 3.1)
+// ---------------------------------------------------------------------------
+const ZWC_START = '\u200B\u200C\u200B\u200C\u200B\u200D';
+const ZWC_END = '\u200C\u200B\u200C\u200B\u200C';
+
+function encodeZwc(text) {
+    const encoded = Array.from(Buffer.from(text, 'utf8')).map(byte => {
+        return byte.toString(2).padStart(8, '0').split('').map(bit => bit === '1' ? '\u200B' : '\u200C').join('');
+    }).join('\u200D');
+    return ZWC_START + encoded + ZWC_END;
+}
+
+function decodeZwc(zwcStr) {
+    try {
+        const coreStr = zwcStr.replace(ZWC_START, '').replace(ZWC_END, '');
+        const bytes = coreStr.split('\u200D').map(zwcByte => {
+            const bits = zwcByte.split('').map(char => char === '\u200B' ? '1' : '0').join('');
+            return parseInt(bits, 2);
+        });
+        return Buffer.from(bytes).toString('utf8');
+    } catch (e) {
+        return null;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Gemini CLI discovery
 // ---------------------------------------------------------------------------
 
@@ -133,15 +159,17 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                         content: [{ text: text }]
                     });
                 } else if (msg.role === 'assistant') {
-                    // --- SSoT 3.0: インライン・メタデータの抽出と再構築 ---
-                    const toolMetadataRegex = /<!--\s*<tool_metadata>(.*?)<\/tool_metadata>\s*-->/g;
+                    // --- SSoT 3.1: ゼロ幅文字メタデータの抽出と再構築 ---
+                    const zwcRegex = new RegExp(`${ZWC_START}([\\u200B\\u200C\\u200D]+)${ZWC_END}`, 'g');
                     const toolCalls = [];
                     let match;
 
-                    // テキスト内のすべての <tool_metadata> を走査
-                    while ((match = toolMetadataRegex.exec(text)) !== null) {
+                    // テキスト内のすべてのゼロ幅文字ブロックを走査
+                    while ((match = zwcRegex.exec(text)) !== null) {
                         try {
-                            const meta = JSON.parse(match[1]);
+                            const decodedJson = decodeZwc(match[0]);
+                            if (!decodedJson) continue;
+                            const meta = JSON.parse(decodedJson);
                             if (meta.type === 'tool_use') {
                                 toolCalls.push({
                                     id: meta.tool_id,
@@ -171,7 +199,7 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
 
                     // 抽出が終わったら、ゴミテキスト（UI進捗テキストやメタデータ全部）を完全に消去する（フィルタリング）
                     // ⚙️ Using tool [...] ... や ✅ Tool finished. 等の行ごと削る
-                    let cleanText = text.replace(/<!--\s*<tool_metadata>.*?<\/tool_metadata>\s*-->/g, '');
+                    let cleanText = text.replace(new RegExp(`${ZWC_START}([\\u200B\\u200C\\u200D]+)${ZWC_END}`, 'g'), '');
                     cleanText = cleanText.replace(/⚙️ Using tool \[.*?\] \.\.\./g, '');
                     cleanText = cleanText.replace(/[✅❌] Tool (finished|failed)[^\n]*/g, '');
                     cleanText = cleanText.trim(); // 空行を潰す
@@ -305,8 +333,8 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                         break;
 
                     case 'tool_use': {
-                        // ツール使用開始の通知（UX用）＋ メタデータのインライン埋め込み (SSoT 3.0)
-                        const metadataStr = `<!-- <tool_metadata>${JSON.stringify(json)}</tool_metadata> -->`;
+                        // ツール使用開始の通知（UX用）＋ メタデータのゼロ幅ステガノグラフィ埋め込み (SSoT 3.1)
+                        const metadataStr = encodeZwc(JSON.stringify(json));
                         sseWrite(res, {
                             id: responseId,
                             object: 'chat.completion.chunk',
@@ -336,7 +364,7 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                             toolMsg = `${statusIcon} Tool finished with unknown status.`;
                         }
 
-                        const metadataStr = `<!-- <tool_metadata>${JSON.stringify(json)}</tool_metadata> -->`;
+                        const metadataStr = encodeZwc(JSON.stringify(json));
 
                         sseWrite(res, {
                             id: responseId,
