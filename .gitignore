@@ -56,3 +56,6 @@ test-*.js
 test-*.mjs
 test-out.log
 logs/*.json
+
+# Docker
+.docker-config/

@@ -15,6 +15,14 @@
 ## 優先度 中 (Medium Priority)
 時間がある時に着手したい改善や、UX向上のための課題。
 
+- [ ] **絶対パスのリファクタリングと危険なフォールバックの排除**
+  - **詳細**: 現状のソースコード内に、コンテナや特定環境に依存した絶対パスや、暗黙の前提に基づく危険なフォールバックが存在し、バグの温床となっている。
+    - **【致命的】mcp-server.mjs のモジュール解決**: `OPENCLAW_ROOT = path.resolve(__dirname, "..")` となっており、Docker内で `/app` 配置された際にルートディレクトリ `/` を指し、グローバルインストールされた OpenClaw 本体 (`/dist/index.js`) を参照できず **提供ツールが0個になるバグ** が発生している。
+    - **runner-pool.js (ワークスペース解決)**: `resolveOpenClawWorkspace()` が `os.homedir()` (`/root`) に依存し、環境変数 `OPENCLAW_CONFIG` を無視して `~/.openclaw/openclaw.json` を直接見に行っている。
+    - **runner-pool.js / streaming.js (GEMINI_CLI_HOMEフォールバック)**: 環境変数 `GEMINI_CLI_HOME` が未定義の際、無言で `path.join(__dir, 'gemini-home')` へフォールバックするため、環境変数の渡し忘れ時に認証情報が消失する原因（前回のExit Code 41問題の温床）になっている。
+    - **start.sh のパス**: `export PATH="/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$PATH"` のように UNIX 系ベタ書きのパスが存在している。
+  - **対応方針**: ローカル環境や他のコンテナ構成でも柔軟に動作するよう、`path.join(__dirname, ...)` への依存を見直し、環境変数（`process.env`）を起点とした相対的なパス解決ロジックへのリファクタリングを実施する。危険なフォールバックは警告ログを出すか明確にエラーとしてクラッシュさせる（Fail Fast）。
+  - **起票日/起票元**: 2026-03-11 / ユーザー指示（破壊的変更リスクを避けるため延期）
 
 ## 優先度 低 / アイデア (Low Priority / Idea)
 「いつかやりたい」レベルの構想、または優先順位が下がった課題。

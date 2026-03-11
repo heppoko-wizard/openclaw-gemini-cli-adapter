@@ -53,18 +53,22 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
         fs.mkdirSync(isolatedGeminiDir, { recursive: true });
     }
 
+    const realGeminiHome = process.env.GEMINI_CLI_HOME || path.join(baseDir, 'gemini-home');
     for (const file of ['oauth_creds.json', 'google_accounts.json', 'installation_id']) {
-        const src = path.join(baseDir, 'gemini-home', '.gemini', file);
+        const src = path.join(realGeminiHome, '.gemini', file);
         if (!fs.existsSync(src)) continue;
         try { fs.copyFileSync(src, path.join(isolatedGeminiDir, file)); } catch (_) { }
     }
 
-    // 1. 隔離環境の settings.json を読み込み、openclaw-tools MCP を注入
-    const settingsPath = path.join(isolatedGeminiDir, 'settings.json');
+    // 1. 本環境の settings.json をベースに読み込み、openclaw-tools MCP を注入
+    const realSettingsPath = path.join(realGeminiHome, '.gemini', 'settings.json');
+    const isolatedSettingsPath = path.join(isolatedGeminiDir, 'settings.json');
     let userSettings = { mcpServers: {} };
     try {
-        if (fs.existsSync(settingsPath)) {
-            userSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+        if (fs.existsSync(realSettingsPath)) {
+            userSettings = JSON.parse(fs.readFileSync(realSettingsPath, 'utf-8'));
+        } else if (fs.existsSync(isolatedSettingsPath)) {
+            userSettings = JSON.parse(fs.readFileSync(isolatedSettingsPath, 'utf-8'));
         }
     } catch (_) { }
 
@@ -90,7 +94,7 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
     ]));
 
     fs.writeFileSync(
-        settingsPath,
+        isolatedSettingsPath,
         JSON.stringify(userSettings, null, 2),
         'utf-8'
     );

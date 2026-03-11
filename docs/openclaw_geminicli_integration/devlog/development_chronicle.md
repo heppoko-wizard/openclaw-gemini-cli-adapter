@@ -797,3 +797,48 @@
 - `interactive-setup.js` — Node.js 絶対パスの取得と `~/.openclaw/adapter-node-path.txt` への保存処理の追加
 - `src/runner-pool.js` — `adapter-node-path.txt` の優先読み込み、堅牢なバイナリ解決 (`resolveNodeBin`) の実装、および `cwd` ディレクトリの自動作成 (`fs.mkdirSync`)
 
+---
+
+## [2026-03-10 ~ 03-11] Session 33: Docker ハイブリッドセットアップの構築と隔離環境の安定化
+
+### やったこと
+
+#### ステップ1: Docker ハイブリッドアーキテクチャへの全面移行
+- **課題**: OpenClaw と Gemini CLI Adapter の手動インストールでは、ユーザーごとにホストOS側の Node.js バージョンやパッケージ群への依存状態が異なり、エラーの再現・対応が難しかった。さらに、ホスト環境を汚染する心理的ハードルが高かった。
+- **解決策**:
+  - `node:24-bookworm` ベースの `Dockerfile` を作成し、コンテナ内部のOS層で `openclaw@2026.3.8` (Gateway+CLI 本体) とアダプタを隔離構築する「Dockerハイブリッド構成」を実装。
+  - `docker-compose.yml` を通じて、永続化が必要なデータのみをホスト側の `.docker-config` や `~/openclaw-workspace` にマウントさせ、安全なサンドボックス環境を確立した。
+
+#### ステップ2: モジュール分割と自動インストールフローの構築
+- **課題**: 原型の `docker-setup.js` が肥大化し保守性が悪化していた。また、WSL2上の Tailscale や Gateway 起動など、多岐にわたる処理の手動介入を削減したかった。
+- **解決策**:
+  - `docker-setup.js` のロジックを `scripts/setup/` 配下に utils (i18n, logger, prompt, env) と steps (00_init ~ 05_workspace) に分解し、オーケストレーター化。
+  - `docker-install.sh` を実装し、Docker自体のサイレントインストールと、Node.jsセットアップ（ユーザーグループ追加を含む）の完全自動化を実現。
+  - Systemd が無効な WSL2 環境において `tailscaled` が自動起動しない問題に対処するため、非 systemd 環境を検知して `sudo sh -c 'tailscaled > /dev/null 2>&1 &'` でバックグラウンド起動させるフォールバックを実装した。
+
+#### ステップ3: Gateway Token 認証の自動突破
+- **課題**: OpenClaw Gateway は初回接続時に Security Token を要求するが、Docker分離環境下ではトークンがランダム生成されブラウザからの認証が困難であった。
+- **解決策**:
+  - `start.sh` と `01_config.js` を改修し、Gateway 用の `openclaw.json` (特に `gateway.auth.token`) を初期化時に `openclaw-docker-session` へ固定生成・上書き保護するロジックを追加。
+  - `docker-setup.js` 完了時に出力されるダッシュボードURLに `?token=openclaw-docker-session` クエリパラメータを直接付与し、ユーザーがワンクリックで認証画面をバイパスできるようにした。
+
+#### ステップ4: System Hang (チャット応答なし) 問題の根本解決
+- **課題**: テスト運用中、UIからチャットを送信してもAIからの返答がなく、ローディングのままシステムハングする事象が発生した。
+  - 調査の結果、コンテナの `adapter.log` にて、ワーカーとして生成された Runner プロセス (Node.js) が、`[Pool] Runner consumed (exited with code 41, signal null). Spawning next...` という無間生成・クラッシュのループに陥っていることを発見。
+  - 原因は、Docker環境におけるパスのズレだった。コンテナマウント側（ホストの `.docker-config/gemini` 等）と隔離環境パスが一致しておらず、認証情報（`oauth_creds.json`等）が見つからないため `gemini-cli-core` の検証フェーズで異常終了していた。
+- **解決策**:
+  - `runner-pool.js` と `streaming.js` 内にハードコードされていた `'gemini-home'` や `src/.gemini` の相対ディレクトリ参照を完全に排除。
+  - `process.env.GEMINI_CLI_HOME` を大元（Single Source of Truth）として動的に解決するアーキテクチャへリファクタリング。これにより、Dockerコンテナ起動時に発行される適切なホーム（`/app/gemini-home` や `.docker-config` アタッチ先）を正確に見つけるようになり、システムハングが解消された。
+  - また、バックグラウンドでの `EACCES` エラー（sudo起因のパーミッション拒否）に対して再帰的な `chown` による所有権復元手順を確立した。
+
+### 成果
+- Mac/Linux/WSL 等の大元ホストを一切汚さずに「一発起動」できる、完全にポータブルなAIアシスタントのコンテナ分離構成が完成した。
+- System Hang や初期 Token の手動入力、Tailscaleデーモン未起動といった様々な鬼門を自動で突破する高度なインストーラ群が安定稼働するようになった。
+
+### 変更したファイル
+- `Dockerfile` & `docker-compose.yml` — （新規）Docker分離構成によるビルド環境
+- `docker-install.sh` — （新規）自動インストーラントリガー
+- `scripts/setup/*` — （新規）肥大化した `docker-setup.js` の段階的モジュール群
+- `start.sh` — Gateway トークンの固定およびプロセス起動ロジックの修正
+- `docker-setup.js` — ダッシュボードURL自動ログイン対応 (`?token=...`)
+- `src/runner-pool.js` & `src/streaming.js` — ハードコードされたパスの排除と `GEMINI_CLI_HOME` に基づく動的パス解決への移行

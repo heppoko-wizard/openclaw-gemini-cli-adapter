@@ -1,0 +1,20 @@
+services:
+  adapter:
+    build: .
+    container_name: openclaw-gemini-adapter
+    restart: unless-stopped
+    # Use host network to seamlessly bind to Tailscale interface and expose ports directly
+    network_mode: "host"
+    environment:
+      - NODE_ENV=production
+      - GEMINI_ADAPTER_PORT=3972
+      - GEMINI_CLI_HOME=/root/.gemini
+      # Path mapping inside the container for the separated workspace
+      - AI_WORKSPACE_DIR=/workspace
+    volumes:
+      # Mount the unified configuration directory from the host to the container's expected paths
+      - ./.docker-config/openclaw:/root/.openclaw
+      - ./.docker-config/gemini:/root/.gemini
+      # Mount the verified and isolated user workspace to restrict AI file access
+      - ${HOST_WORKSPACE_DIR:-~/openclaw-workspace}:/workspace
+    # Additional capabilities might be required depending on network features, but usually host network is enough.

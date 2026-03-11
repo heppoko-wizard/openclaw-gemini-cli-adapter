@@ -30,7 +30,8 @@ function prepareGeminiEnv({ sessionKey, workspaceDir, systemPrompt }) {
     fs.mkdirSync(chatsDir, { recursive: true });
 
     // --- settings.json with MCP server injection ---
-    const realGeminiDir = path.join(__dir, 'gemini-home', '.gemini');
+    const realGeminiHome = process.env.GEMINI_CLI_HOME || path.join(__dir, 'gemini-home');
+    const realGeminiDir = path.join(realGeminiHome, '.gemini');
     const realSettingsPath = path.join(realGeminiDir, 'settings.json');
     let userSettings = {};
     try {

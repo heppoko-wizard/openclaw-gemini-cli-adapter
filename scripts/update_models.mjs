@@ -16,7 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const OPENCLAW_JSON_PATH = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+const OPENCLAW_JSON_PATH = process.env.OPENCLAW_CONFIG || path.join(os.homedir(), '.openclaw', 'openclaw.json');
 
 try {
     const core = await import('@google/gemini-cli-core');

@@ -21,8 +21,8 @@ PORT="${GEMINI_ADAPTER_PORT:-3972}"
 LOG_FILE="${SCRIPT_DIR}/logs/adapter.log"
 PID_FILE="${SCRIPT_DIR}/logs/adapter.pid"
 
-# Gemini CLI のホームディレクトリをプラグインローカル（gemini-home）に設定
-export GEMINI_CLI_HOME="${SCRIPT_DIR}/gemini-home"
+# Gemini CLI のホームディレクトリを尊重 (Dockerfileで設定済み)
+# export GEMINI_CLI_HOME="${SCRIPT_DIR}/gemini-home"
 
 # ランタイム選択: server.js は必ず Node.js を使用
 # Bun の HTTP サーバーは req.on('close') が TCP 切断ではなく body 消費完了で発火するため、
@@ -49,6 +49,26 @@ if nc -z localhost "$PORT" 2>/dev/null || lsof -i :"$PORT" >/dev/null 2>&1; then
     exit 0
 fi
 
+if [ ! -s "$OPENCLAW_CONFIG" ]; then
+    echo "[start.sh] Initializing openclaw.json to prevent Gateway from destroying it..."
+    mkdir -p "$(dirname "$OPENCLAW_CONFIG")"
+    cat << 'EOF' > "$OPENCLAW_CONFIG"
+{
+  "agents": {
+    "defaults": {
+      "model": "gemini-adapter/auto-gemini-3"
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "token": "openclaw-docker-session"
+    }
+  }
+}
+EOF
+fi
+
 echo "[start.sh] Syncing models to OpenClaw config..."
 $RUNTIME "$SCRIPT_DIR/scripts/update_models.mjs" || echo "[start.sh] Warning: Failed to sync models"
 
@@ -69,3 +89,11 @@ else
     cat "$LOG_FILE"
     exit 1
 fi
+
+# ==========================================
+# OpenClaw Gateway の起動 (フォアグラウンド)
+# ==========================================
+echo "[start.sh] Launching OpenClaw Gateway..."
+# openclaw はグローバルインストール済み。
+# exec することでコンテナのメインプロセスをこれに置き換える。
+exec openclaw gateway
