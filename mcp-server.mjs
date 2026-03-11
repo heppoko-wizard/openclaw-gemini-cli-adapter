@@ -42,26 +42,45 @@ function logToBoth(msg) {
     } catch (_) { }
 }
 
-// The openclaw repo root is one level above this `openclaw-gemini-cli-adapter/` directory.
-const OPENCLAW_ROOT = path.resolve(__dirname, "..");
+let OPENCLAW_ROOT;
+
+// 1. 環境変数による完全指定 (Dockerなどでセットアップ時に固定)
+if (process.env.OPENCLAW_PATH && fs.existsSync(path.join(process.env.OPENCLAW_PATH, "dist", "index.js"))) {
+    OPENCLAW_ROOT = process.env.OPENCLAW_PATH;
+}
+// 2. ローカル開発環境の静的パス (__dirname/..)
+else if (fs.existsSync(path.join(path.resolve(__dirname, ".."), "dist", "index.js"))) {
+    OPENCLAW_ROOT = path.resolve(__dirname, "..");
+}
+// 3. 動的フォールバック: グローバルインストール先の探索
+else {
+    try {
+        const npmRoot = execSync('npm root -g', { encoding: 'utf8' }).trim();
+        const globalOpenClawPath = path.join(npmRoot, "openclaw");
+        if (fs.existsSync(path.join(globalOpenClawPath, "dist", "index.js"))) {
+            OPENCLAW_ROOT = globalOpenClawPath;
+        } else {
+            // macOS / Linux の一般的なグローバル npm prefix の直下もチェック
+            const fallbackPath = path.resolve('/usr/local/lib/node_modules/openclaw');
+            if (fs.existsSync(path.join(fallbackPath, "dist", "index.js"))) {
+                OPENCLAW_ROOT = fallbackPath;
+            }
+        }
+    } catch (e) {
+        logToBoth(`[MCP Adapter] Warning: Global path resolution failed: ${e.message}`);
+    }
+}
+
+if (!OPENCLAW_ROOT) {
+    logToBoth("[MCP Adapter] FATAL: Could not resolve OPENCLAW_ROOT path.");
+    process.exit(1);
+}
+
 const OPENCLAW_DIST = path.join(OPENCLAW_ROOT, "dist");
 const OPENCLAW_DIST_INDEX = path.join(OPENCLAW_DIST, "index.js");
 
 logToBoth(`[MCP Adapter] Script location: ${__dirname}`);
 logToBoth(`[MCP Adapter] OpenClaw root: ${OPENCLAW_ROOT}`);
-
-// ---------- [1] Dynamic Chunk Discovery ----------
-/**
- * Scans dist/*.js files to find the chunk exporting `createOpenClawTools`.
- *
- * Strategy (ビルドごとに安定):
- *   1. readdirSync で dist/ をスキャン
- *   2. ファイルを文字列読み込みして "createOpenClawTools as X" を正規表現で探す
- *      → bundlerはエクスポート名を常に可読形式で出力するため、minify後でも有効
- *   3. alias X を取得し、import() 後に module[X] で関数を取り出す
- *
- * ファイル名ハッシュが変わっても、エイリアスが変わっても動的に対応できる。
- */
 function findCreateOpenClawToolsChunk(distDir) {
     let files;
     try {
