@@ -53,7 +53,10 @@ function prepareIsolatedGeminiHome(workspaceCwd) {
         fs.mkdirSync(isolatedGeminiDir, { recursive: true });
     }
 
-    const realGeminiHome = process.env.GEMINI_CLI_HOME || path.join(baseDir, 'gemini-home');
+    const realGeminiHome = process.env.GEMINI_CLI_HOME;
+    if (!realGeminiHome) {
+        throw new Error("CRITICAL: GEMINI_CLI_HOME environment variable is not defined. Please check your .env or docker-compose.yml.");
+    }
     for (const file of ['oauth_creds.json', 'google_accounts.json', 'installation_id']) {
         const src = path.join(realGeminiHome, '.gemini', file);
         if (!fs.existsSync(src)) continue;
