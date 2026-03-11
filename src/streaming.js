@@ -113,21 +113,95 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
     try {
         log(`[adapter] Acquiring runner for sessionKey: ${sessionKey}`);
 
-        // 履歴をGemini CLIの内部SessionData形式に合成する
+        // 履歴をGemini CLIの内部SessionData形式に合成する (SSoT 3.0)
         let resumedSessionData = undefined;
         if (messages && messages.length > 0) {
-            const geminiMessages = messages.map(msg => {
+            const geminiMessages = [];
+            const timestamp = new Date().toISOString();
+
+            for (const msg of messages) {
                 let text = '';
                 if (typeof msg.content === 'string') {
                     text = msg.content;
                 } else if (Array.isArray(msg.content)) {
                     text = msg.content.map(p => p.type === 'text' ? p.text : '').join('\n');
                 }
-                return {
-                    type: msg.role === 'assistant' ? 'gemini' : 'user',
-                    content: [{ text: text }]
-                };
-            });
+
+                if (msg.role === 'user') {
+                    geminiMessages.push({
+                        type: 'user',
+                        content: [{ text: text }]
+                    });
+                } else if (msg.role === 'assistant') {
+                    // --- SSoT 3.0: インライン・メタデータの抽出と再構築 ---
+                    const toolMetadataRegex = /<!--\s*<tool_metadata>(.*?)<\/tool_metadata>\s*-->/g;
+                    const toolCalls = [];
+                    let match;
+
+                    // テキスト内のすべての <tool_metadata> を走査
+                    while ((match = toolMetadataRegex.exec(text)) !== null) {
+                        try {
+                            const meta = JSON.parse(match[1]);
+                            if (meta.type === 'tool_use') {
+                                toolCalls.push({
+                                    id: meta.tool_id,
+                                    name: meta.tool_name,
+                                    args: meta.parameters || {},
+                                    status: 'success',
+                                    timestamp: timestamp
+                                });
+                            } else if (meta.type === 'tool_result') {
+                                // 該当の tool_use (id一致) を探して結果をアタッチする
+                                const targetCall = toolCalls.find(tc => tc.id === meta.tool_id);
+                                if (targetCall) {
+                                    targetCall.result = [{
+                                        functionResponse: {
+                                            name: targetCall.name,
+                                            response: {
+                                                output: meta.output || (meta.error ? JSON.stringify(meta.error) : 'success')
+                                            }
+                                        }
+                                    }];
+                                }
+                            }
+                        } catch (e) {
+                            log(`[adapter] Failed to parse tool_metadata: ${e.message}`);
+                        }
+                    }
+
+                    // 抽出が終わったら、ゴミテキスト（UI進捗テキストやメタデータ全部）を完全に消去する（フィルタリング）
+                    // ⚙️ Using tool [...] ... や ✅ Tool finished. 等の行ごと削る
+                    let cleanText = text.replace(/<!--\s*<tool_metadata>.*?<\/tool_metadata>\s*-->/g, '');
+                    cleanText = cleanText.replace(/⚙️ Using tool \[.*?\] \.\.\./g, '');
+                    cleanText = cleanText.replace(/[✅❌] Tool (finished|failed)[^\n]*/g, '');
+                    cleanText = cleanText.trim(); // 空行を潰す
+
+                    // Gemini用メッセージオブジェクトの構築
+                    const geminiMsg = {
+                        type: 'gemini',
+                        content: [{ text: cleanText }]
+                    };
+
+                    // 復元した toolCalls があればアタッチする
+                    if (toolCalls.length > 0) {
+                        geminiMsg.toolCalls = toolCalls;
+
+                        // 万が一クリーンなアシスタントのテキストが空になってしまった場合は、
+                        // スキーマバリデーションエラーを防ぐために空文字をセットするか、
+                        // もしくは純粋なツール実行のみのターンとして振る舞う
+                        if (!cleanText) {
+                            geminiMsg.content = [{ text: '' }];
+                        }
+                    }
+
+                    geminiMessages.push(geminiMsg);
+                } else if (msg.role === 'tool' || msg.role === 'toolResult') {
+                    // OpenClaw自身がツールを実行して結果を返してきた場合 (旧仕様用・念のため残す)
+                    // (SSoT3.0では基本的にここは通らない)
+                    continue; // SSoT3.0ではインラインで処理済みのためスキップ
+                }
+            }
+
             // Gemini APIは user/gemini(model) が交互である必要はないが、CLIの再開機構に乗せる構造を作る
             resumedSessionData = {
                 conversation: {
@@ -230,9 +304,9 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                         }
                         break;
 
-                    case 'tool_use':
-                        // ツール使用開始の通知（UX用）
-                        // SSoT化により履歴汚染の懸念は解消されたため、進捗表示を維持
+                    case 'tool_use': {
+                        // ツール使用開始の通知（UX用）＋ メタデータのインライン埋め込み (SSoT 3.0)
+                        const metadataStr = `<!-- <tool_metadata>${JSON.stringify(json)}</tool_metadata> -->`;
                         sseWrite(res, {
                             id: responseId,
                             object: 'chat.completion.chunk',
@@ -240,15 +314,15 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                             model: 'gemini',
                             choices: [{
                                 index: 0,
-                                delta: { content: `\n\n⚙️ Using tool [${json.tool_name}] ...\n` },
+                                delta: { content: `\n\n⚙️ Using tool [${json.tool_name}] ...\n${metadataStr}\n` },
                                 finish_reason: null
                             }]
                         });
                         break;
+                    }
 
                     case 'tool_result': {
-                        // ツール実行結果の通知（UX用）
-                        // SSoT化により履歴汚染の懸念は解消されたため、結果表示を維持
+                        // ツール実行結果の通知（UX用）＋ メタデータのインライン埋め込み (SSoT 3.0)
                         const isSuccess = json.status === 'success' && !json.error;
                         const statusIcon = isSuccess ? '✅' : '❌';
                         let toolMsg;
@@ -261,6 +335,9 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                         } else {
                             toolMsg = `${statusIcon} Tool finished with unknown status.`;
                         }
+
+                        const metadataStr = `<!-- <tool_metadata>${JSON.stringify(json)}</tool_metadata> -->`;
+
                         sseWrite(res, {
                             id: responseId,
                             object: 'chat.completion.chunk',
@@ -268,7 +345,7 @@ async function runGeminiStreaming({ prompt, messages, model, sessionName, mediaP
                             model: 'gemini',
                             choices: [{
                                 index: 0,
-                                delta: { content: `${toolMsg}\n\n` },
+                                delta: { content: `${toolMsg}\n${metadataStr}\n\n` },
                                 finish_reason: null
                             }]
                         });
