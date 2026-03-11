@@ -20,7 +20,7 @@
     - **mcp-server.mjs のモジュール解決**: 現在は `execSync('npm root -g')` によるフォールバックが機能して正常に解決できているが、フォールバックに依存しすぎた構成である。
     - **runner-pool.js (ワークスペース解決)**: `resolveOpenClawWorkspace()` が `os.homedir()` (`/root`) に依存し、環境変数 `OPENCLAW_CONFIG` を無視して `~/.openclaw/openclaw.json` を直接見に行っている。
     - **runner-pool.js / streaming.js (GEMINI_CLI_HOME解決)**: [済] 環境変数 `GEMINI_CLI_HOME` が未定義の際にエラーを出すよう修正 (Fail Fast化)。
-    - **start.sh のパス**: `export PATH="/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$PATH"` のように UNIX 系ベタ書きのパスが存在している。
+    - **start.sh のパス**: [済] `export PATH="...:$PATH"` によるシステムパスの強制前置を、`$PATH:...` という安全な後方追加（フォールバック）形式に修正済。
   - **対応方針**: ローカル環境や他のコンテナ構成でも柔軟に動作するよう、`path.join(__dirname, ...)` への依存を見直し、環境変数（`process.env`）を起点とした相対的なパス解決ロジックへのリファクタリングを継続する。
   - **起票日/起票元**: 2026-03-11 / ユーザー指示（破壊的変更リスクを避けるため延期）
 

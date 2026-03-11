@@ -9,8 +9,8 @@
 
 set -euo pipefail
 
-# Node.jsパスの解決 (非対話シェルから実行されたときのため)
-export PATH="/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$PATH"
+# Node.jsパスの解決 (非対話シェルから実行されたときのため、既存のPATHの後ろにフォールバックとして追加)
+export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin"
 if ! command -v node >/dev/null 2>&1; then
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && set +u && \. "$NVM_DIR/nvm.sh" && set -u || true
