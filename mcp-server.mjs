@@ -23,6 +23,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { execSync } from "node:child_process";
 
 // ---------- [0] Portable path setup ----------
 const __filename = fileURLToPath(import.meta.url);

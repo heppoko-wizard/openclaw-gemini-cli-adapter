@@ -960,3 +960,24 @@
 - `docker-compose.yml` — ビルドコンテキストへの `network: host` 付与とイメージ名の明記
 - `docker-setup.js` — 不要な完了後案内メッセージの削除
 - `scripts/setup/steps/03_gogcli.js` — `spawnSync` における `shell: true` の剥奪と Array 引数への分割（警告抑止）
+
+---
+
+## [2026-03-12] Session 40: MCPツールのロード失敗バグ（宝物庫喪失）の調査と修正
+
+### やったこと
+- **課題**: Dockerの完全自動セットアップ移行完了後、Gemini CLI のUI上からAIが「自身のツール一覧（cron等）が見つからない」と発言する事象が発生した。
+- **原因調査と特定**:
+  - `mcp.log` を確認したところ、`[MCP Adapter] Warning: Global path resolution failed: execSync is not defined` という参照エラーでMCPサーバー自体がクラッシュしていたことが判明。Session 35 におけるパス解決の最適化の際、`node:child_process` からの `execSync` のインポートが抜け落ちていた。
+  - さらに、Docker移行に伴って新設した `scripts/setup/steps/01_config.js` において、`settings.json` の `mcpServers` オブジェクト（Gemini CLIに行わせるアダプタ起動指定）の生成ロジックが丸ごと欠落していた事が判明。
+- **解決策**:
+  - `mcp-server.mjs` に `import { execSync } from "node:child_process";` を追記。
+  - `01_config.js` を改修し、`settings.json` 生成時に必ず `mcpServers.openclaw-tools` の定義を注入するよう処理を追加。
+
+### 成果
+- 修正後、コンテナを再ビルド・再起動したところ、`mcp.log` にて `cron` を含む全15個の OpenClaw 由来ツールが再び正常にロードされ、`[MCP Adapter] Server ready (session: pool-shared, tools: 15)` のステータスまで到達した。
+- その後の実機テストにおいて、AIが `cron` ツールを認識し、登録済みジョブの情報を正確に引きずり出せる（宝物庫の扉が完全に開いた状態である）ことを確認し、本日の全作業を完遂した。
+
+### 変更したファイル
+- `mcp-server.mjs` — `execSync` のインポート漏れの修復
+- `scripts/setup/steps/01_config.js` — `mcpServers` 定義の自動注入ロジックの追加
