@@ -1,0 +1,8 @@
+{
+  "hooksConfig": {
+    "disabled": [
+      "quota-pre-check",
+      "quota-auto-switch"
+    ]
+  }
+}

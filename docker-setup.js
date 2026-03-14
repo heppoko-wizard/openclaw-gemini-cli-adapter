@@ -30,13 +30,11 @@ async function main() {
     }
 
     // ==========================================
-    // 2. 完了メッセージ
+    // 2. 完了
     // ==========================================
     logBold('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    logSuccess(L()?.done || '🎉 全ての準備が整いました。');
-    logBold(C.green('\n🎉 セットアップが正常に完了しました！'));
-    console.log(`\n  ダッシュボード: ${C.cyan('http://localhost:18789?token=openclaw-docker-session')}`);
-    console.log(`  (Tailscale利用時: http://TailscaleのIP:18789?token=openclaw-docker-session)`);
+    logSuccess('設定の保存とワークスペースの構築が完了しました。');
+    logDim('一時コンテナを終了し、本番コンテナを起動します...\n');
 }
 
 main().catch(err => {

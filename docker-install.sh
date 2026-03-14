@@ -13,6 +13,7 @@ C_GREEN='\033[32m'
 C_YELLOW='\033[33m'
 C_RED='\033[31m'
 C_BOLD='\033[1m'
+C_DIM='\033[2m'
 
 echo -e "\n${C_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
 echo -e "${C_BOLD}🚀 OpenClaw Gemini CLI Adapter: Docker Installation${C_RESET}"
@@ -23,50 +24,86 @@ if command -v docker >/dev/null 2>&1; then
     echo -e "  ${C_GREEN}✓ Docker is installed ($(docker --version))${C_RESET}"
 else
     echo -e "  ${C_YELLOW}⚠ Docker is not installed. Installing...${C_RESET}"
-    echo -e "  ${C_CYAN}Downloading get.docker.com script...${C_RESET}"
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    echo -e "  ${C_CYAN}Executing Docker installation...${C_RESET}"
-    sudo sh get-docker.sh
-    rm -f get-docker.sh
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if command -v brew >/dev/null 2>&1; then
+            echo -e "  ${C_CYAN}Installing Docker via Homebrew...${C_RESET}"
+            brew install --cask docker
+        else
+            echo -e "  ${C_RED}⚠ Homebrew is not installed. Please install Docker Desktop manually: https://www.docker.com/products/docker-desktop/${C_RESET}"
+            exit 1
+        fi
+    else
+        echo -e "  ${C_CYAN}Downloading get.docker.com script...${C_RESET}"
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        echo -e "  ${C_CYAN}Executing Docker installation...${C_RESET}"
+        sudo sh get-docker.sh
+        rm -f get-docker.sh
+    fi
     echo -e "  ${C_GREEN}✓ Docker installation completed.${C_RESET}"
 fi
 
-# 1.5 Check Docker Daemon (WSL fix)
+# 1.5 Check Docker Daemon (WSL & macOS fix)
 echo -e "\n  ${C_BOLD}Checking Docker daemon status...${C_RESET}"
+DOCKER_CMD="docker"
 if ! docker info >/dev/null 2>&1; then
-    echo -e "  ${C_YELLOW}⚠ Docker daemon appears to be stopped. Attempting to start it...${C_RESET}"
-    
-    # Check if systemd is actual init system (PID 1) to avoid WSL host down errors
-    if [ -x "$(command -v systemctl)" ] && grep -q systemd /proc/1/comm 2>/dev/null; then
-        sudo systemctl start docker
+    if [[ "$OSTYPE" == "linux-gnu"* ]] && sudo docker info >/dev/null 2>&1; then
+        echo -e "  ${C_GREEN}✓ Docker daemon is running (using sudo for access).${C_RESET}"
+        DOCKER_CMD="sudo docker"
     else
-        sudo service docker start
+        echo -e "  ${C_YELLOW}⚠ Docker daemon appears to be stopped. Attempting to start it...${C_RESET}"
+        
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            open -a Docker
+            echo -e "  ${C_CYAN}Waiting for Docker Desktop to start...${C_RESET}"
+            sleep 15
+        elif [ -x "$(command -v systemctl)" ] && grep -q systemd /proc/1/comm 2>/dev/null; then
+            sudo systemctl enable docker
+            sudo systemctl start docker
+            sleep 3
+        else
+            sudo service docker start
+            sleep 3
+        fi
+
+        if ! $DOCKER_CMD info >/dev/null 2>&1; then
+            # Re-check with sudo on Linux
+            if [[ "$OSTYPE" == "linux-gnu"* ]] && sudo docker info >/dev/null 2>&1; then
+                DOCKER_CMD="sudo docker"
+            else
+                echo -e "  ${C_RED}⚠ Failed to start Docker daemon. Please start Docker Desktop or the daemon manually.${C_RESET}"
+                exit 1
+            fi
+        fi
+        echo -e "  ${C_GREEN}✓ Docker daemon started successfully.${C_RESET}"
     fi
-    sleep 3
-    if ! docker info >/dev/null 2>&1; then
-        echo -e "  ${C_RED}⚠ Failed to start Docker daemon. Please start Docker Desktop or the daemon manually.${C_RESET}"
-        exit 1
-    fi
-    echo -e "  ${C_GREEN}✓ Docker daemon started successfully.${C_RESET}"
+fi
+
+# 1.6 Verify Docker Command
+if [ -z "$DOCKER_CMD" ]; then
+    echo -e "  ${C_RED}⚠ Docker command could not be resolved. Please ensure Docker is installed and the daemon is running.${C_RESET}"
+    exit 1
 fi
 
 # 2. Check docker-compose plugin
-if docker compose version >/dev/null 2>&1; then
+if $DOCKER_CMD compose version >/dev/null 2>&1; then
     echo -e "  ${C_GREEN}✓ Docker Compose plugin is available${C_RESET}"
 else
     echo -e "  ${C_RED}⚠ Docker Compose plugin not found. Please ensure it is installed.${C_RESET}"
     exit 1
 fi
 
-# 3. Add user to docker group if needed
-USER_GROUPS=$(groups)
-if [[ $USER_GROUPS != *"docker"* ]]; then
-    echo -e "\n  ${C_YELLOW}⚠ Current user is not in the 'docker' group.${C_RESET}"
-    echo -e "  ${C_CYAN}Adding $USER to docker group...${C_RESET}"
-    sudo usermod -aG docker "$USER"
-    echo -e "\n  ${C_BOLD}${C_GREEN}✓ Added to docker group.${C_RESET}"
-    echo -e "  ${C_BOLD}Applying group changes and proceeding slowly to avoid permission errors...${C_RESET}"
-    sleep 2
+# 3. Add user to docker group if needed (Linux only)
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    USER_GROUPS=$(groups)
+    if [[ $USER_GROUPS != *"docker"* ]]; then
+        echo -e "\n  ${C_YELLOW}⚠ Current user is not in the 'docker' group.${C_RESET}"
+        echo -e "  ${C_CYAN}Adding $USER to docker group...${C_RESET}"
+        sudo usermod -aG docker "$USER"
+        echo -e "\n  ${C_BOLD}${C_GREEN}✓ Added to docker group.${C_RESET}"
+        echo -e "  ${C_BOLD}Applying group changes and proceeding slowly to avoid permission errors...${C_RESET}"
+        echo -e "  ${C_DIM}(Note: Group changes take effect after relogin, using sudo for now.)${C_RESET}"
+        sleep 2
+    fi
 fi
 
 # 4. Tailscale Remote Access Setup (Host Level)
@@ -77,31 +114,40 @@ else
     read -p "  🌍 Install Tailscale for secure remote access? [y/N]: " ts_choice
     if [[ "$ts_choice" =~ ^[Yy]$ ]]; then
         echo -e "  ${C_CYAN}Installing Tailscale...${C_RESET}"
-        curl -fsSL https://tailscale.com/install.sh | sh
-        
-        # Check if systemd is actual init system (PID 1)
-        if [ -x "$(command -v systemctl)" ] && grep -q systemd /proc/1/comm 2>/dev/null; then
-            sudo systemctl enable --now tailscaled
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            if command -v brew >/dev/null 2>&1; then
+                brew install tailscale
+                sudo tailscale up
+            else
+                echo -e "  ${C_RED}⚠ Homebrew not found. Please install Tailscale manually.${C_RESET}"
+            fi
         else
-            sudo sh -c 'tailscaled > /dev/null 2>&1 &'
+            curl -fsSL https://tailscale.com/install.sh | sh
+            # Check if systemd is actual init system (PID 1)
+            if [ -x "$(command -v systemctl)" ] && grep -q systemd /proc/1/comm 2>/dev/null; then
+                sudo systemctl enable --now tailscaled
+            else
+                sudo sh -c 'tailscaled > /dev/null 2>&1 &'
+            fi
+            sleep 3
+            echo -e "  ${C_BOLD}Please authenticate Tailscale in your browser:${C_RESET}"
+            sudo tailscale up
         fi
-        sleep 3
-        echo -e "  ${C_BOLD}Please authenticate Tailscale in your browser:${C_RESET}"
-        sudo tailscale up
     else
         echo -e "  ${C_DIM}Tailscale setup skipped.${C_RESET}"
     fi
 fi
 
+
 # 5. Build and Run docker-setup.js inside a temporary container
 echo -e "\n  ${C_BOLD}Building setup and production container...${C_RESET}"
 # Use --network host to prevent WSL2 specific DNS/MTU docker bridge network timeouts
-docker build --network host -t openclaw-gemini-adapter:latest -f Dockerfile .
+$DOCKER_CMD build --network host -t openclaw-gemini-adapter:latest -f Dockerfile .
 
 echo -e "\n  ${C_BOLD}Proceeding to the authentication and workspace setup (Isolated Container Mode)...${C_RESET}"
 # Run container interactively, mounting current directory to allow setup scripts to write .env and .docker-config
 # Network mode host allows localhost OAuth callbacks to reach the container
-docker run -it --rm \
+$DOCKER_CMD run -it --rm \
     --network host \
     -v "$(pwd):/app" \
     -w /app \
@@ -116,11 +162,40 @@ if [ $SETUP_EXIT_CODE -eq 0 ]; then
     echo -e "${C_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}\n"
     
     # 6. Start the actual production container (using the already built image)
-    docker compose up -d
+    $DOCKER_CMD compose up -d
     
     if [ $? -eq 0 ]; then
-        echo -e "\n  ${C_BOLD}${C_GREEN}✓ Container is now running in the background!${C_RESET}"
-        echo -e "  To view logs: ${C_CYAN}docker logs -f openclaw-gemini-adapter${C_RESET}"
+        echo -e "\n  ${C_BOLD}${C_GREEN}🎉 セットアップが正常に完了しました！${C_RESET}"
+        
+        # Ensure files created via sudo docker are owned by the current user
+        if [ -d ".docker-config" ]; then
+            sudo chown -R "$USER:$USER" .docker-config >/dev/null 2>&1 || true
+        fi
+        if [ -f ".env" ]; then
+            sudo chown "$USER:$USER" .env >/dev/null 2>&1 || true
+            # Also chown the workspace directory defined in .env
+            WORKSPACE_PATH=$(grep "^HOST_WORKSPACE_DIR=" .env | cut -d'=' -f2)
+            if [ -n "$WORKSPACE_PATH" ]; then
+                # Expand ~ to $HOME
+                WORKSPACE_PATH="${WORKSPACE_PATH//\~/$HOME}"
+                if [ -d "$WORKSPACE_PATH" ]; then
+                    sudo chown -R "$USER:$USER" "$WORKSPACE_PATH" >/dev/null 2>&1 || true
+                fi
+            fi
+        fi
+
+        echo -e "\n  ${C_BOLD}ダッシュボード: ${C_CYAN}http://localhost:18789${C_RESET}"
+        echo -e "  (Tailscale利用時: ${C_CYAN}http://TailscaleのIP:18789${C_RESET})"
+        
+        echo -e "\n  ${C_GREEN}✓ Container is now running in the background!${C_RESET}"
+        echo -e "  To view logs: ${C_CYAN}$DOCKER_CMD logs -f openclaw-gemini-adapter${C_RESET}"
+        
+        echo -e "\n${C_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+        echo -e "  ${C_YELLOW}⚠ 重要: グループ設定の反映について${C_RESET}"
+        echo -e "  現在、一時的に sudo を使用してセットアップを完了しました。"
+        echo -e "  今後 sudo なしで Docker を操作するためには、"
+        echo -e "  一度${C_CYAN}ログアウトして再ログイン${C_RESET}するか、${C_CYAN}システムを再起動${C_RESET}してください。"
+        echo -e "${C_BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}\n"
     else
         echo -e "\n  ${C_RED}⚠ Failed to start the container. Please check docker-compose output.${C_RESET}"
     fi
@@ -128,4 +203,5 @@ else
     echo -e "\n  ${C_RED}⚠ Setup was interrupted or failed. Aborting container start.${C_RESET}"
     exit $SETUP_EXIT_CODE
 fi
+
 

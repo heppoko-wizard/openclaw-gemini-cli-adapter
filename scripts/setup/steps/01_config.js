@@ -22,7 +22,8 @@ module.exports = async function runStep() {
         config.gateway = config.gateway || {};
         config.gateway.mode = 'local';
         config.gateway.auth = config.gateway.auth || {};
-        config.gateway.auth.token = 'openclaw-docker-session';
+        config.gateway.auth.mode = 'none';
+        if (config.gateway.auth.token) delete config.gateway.auth.token;
         fs.writeFileSync(OPENCLAW_CONFIG, JSON.stringify(config, null, 2));
 
         fs.mkdirSync(settingsDir, { recursive: true });

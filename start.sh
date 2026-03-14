@@ -62,7 +62,7 @@ if [ ! -s "$OPENCLAW_CONFIG" ]; then
   "gateway": {
     "mode": "local",
     "auth": {
-      "token": "openclaw-docker-session"
+      "mode": "none"
     }
   }
 }
