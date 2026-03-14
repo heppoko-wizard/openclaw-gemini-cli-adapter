@@ -145,10 +145,17 @@ echo -e "\n  ${C_BOLD}Building setup and production container...${C_RESET}"
 $DOCKER_CMD build --network host -t openclaw-gemini-adapter:latest -f Dockerfile .
 
 echo -e "\n  ${C_BOLD}Proceeding to the authentication and workspace setup (Isolated Container Mode)...${C_RESET}"
+
+# Capture Tailscale IP and Hostname to pass to the setup container
+TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "")
+TAILSCALE_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName' | sed 's/\.$//' || echo "")
+
 # Run container interactively, mounting current directory to allow setup scripts to write .env and .docker-config
 # Network mode host allows localhost OAuth callbacks to reach the container
 $DOCKER_CMD run -it --rm \
     --network host \
+    -e TAILSCALE_IP="$TAILSCALE_IP" \
+    -e TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME" \
     -v "$(pwd):/app" \
     -w /app \
     openclaw-gemini-adapter:latest \
